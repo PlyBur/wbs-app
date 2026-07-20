@@ -73,28 +73,28 @@ export default async function DashboardPage() {
         <Card className="border-l-4 border-l-emerald-500">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 mb-1"><TrendingUp className="w-3.5 h-3.5 text-emerald-600" /><p className="text-xs text-muted-foreground">Revenue this month</p></div>
-            <p className="text-2xl font-bold text-emerald-600">{formatZAR(revenueThisMonth)}</p>
+            <p className="text-base sm:text-2xl font-bold text-emerald-600 truncate">{formatZAR(revenueThisMonth)}</p>
             <p className="text-xs text-muted-foreground mt-1">Payments received</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-primary">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 mb-1"><Wallet className="w-3.5 h-3.5 text-primary" /><p className="text-xs text-muted-foreground">Outstanding</p></div>
-            <p className="text-2xl font-bold">{formatZAR(outstanding)}</p>
+            <p className="text-base sm:text-2xl font-bold truncate">{formatZAR(outstanding)}</p>
             <p className="text-xs text-muted-foreground mt-1">{issuedInvoices.length} issued invoice{issuedInvoices.length !== 1 ? "s" : ""}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-blue-400">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 mb-1"><BarChart3 className="w-3.5 h-3.5 text-blue-500" /><p className="text-xs text-muted-foreground">Quote pipeline</p></div>
-            <p className="text-2xl font-bold">{formatZAR(pipeline)}</p>
+            <p className="text-base sm:text-2xl font-bold truncate">{formatZAR(pipeline)}</p>
             <p className="text-xs text-muted-foreground mt-1">{openQuotes.length} open quote{openQuotes.length !== 1 ? "s" : ""}</p>
           </CardContent>
         </Card>
         <Card className={`border-l-4 ${overdueAmount > 0 ? "border-l-destructive" : "border-l-muted"}`}>
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 mb-1"><AlertTriangle className={`w-3.5 h-3.5 ${overdueAmount > 0 ? "text-destructive" : "text-muted-foreground"}`} /><p className="text-xs text-muted-foreground">Overdue</p></div>
-            <p className={`text-2xl font-bold ${overdueAmount > 0 ? "text-destructive" : ""}`}>{formatZAR(overdueAmount)}</p>
+            <p className={`text-base sm:text-2xl font-bold truncate ${overdueAmount > 0 ? "text-destructive" : ""}`}>{formatZAR(overdueAmount)}</p>
             <p className="text-xs text-muted-foreground mt-1">{overdueInvoices.length} invoice{overdueInvoices.length !== 1 ? "s" : ""} past due</p>
           </CardContent>
         </Card>
