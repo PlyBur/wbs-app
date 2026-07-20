@@ -380,10 +380,11 @@ export default function ProjectDetailPage() {
                                 <Link href={`/invoices/${termInv.id}`} className="inline-flex items-center gap-1 h-7 px-2 text-xs rounded hover:bg-muted transition-colors">
                                   <Eye className="w-3 h-3" />View
                                 </Link>
-                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
-                                  onClick={() => window.open(`/api/pdf/invoice/${termInv.id}`, "_blank")}>
-                                  <Download className="w-3 h-3" />PDF
-                                </Button>
+                                <a href={`/api/pdf/invoice/${termInv.id}`} target="_blank" rel="noopener noreferrer">
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs">
+                                    <Download className="w-3 h-3" />PDF
+                                  </Button>
+                                </a>
                                 {termDue > 0 && (
                                   <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                                     onClick={() => { setRecordPaymentFor(termInv); setPaymentForm(f => ({ ...f, amount: String(termDue.toFixed(2)) })) }}>
@@ -445,10 +446,11 @@ export default function ProjectDetailPage() {
                               <Link href={`/invoices/${inv.id}`} className="inline-flex items-center gap-1 h-7 px-2 text-xs rounded hover:bg-muted transition-colors">
                                 <Eye className="w-3 h-3" />View
                               </Link>
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
-                                onClick={() => window.open(`/api/pdf/invoice/${inv.id}`, "_blank")}>
-                                <Download className="w-3 h-3" />PDF
-                              </Button>
+                              <a href={`/api/pdf/invoice/${inv.id}`} target="_blank" rel="noopener noreferrer">
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs">
+                                  <Download className="w-3 h-3" />PDF
+                                </Button>
+                              </a>
                               {invDue > 0 && (
                                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                                   onClick={() => { setRecordPaymentFor(inv); setPaymentForm(f => ({ ...f, amount: String(invDue.toFixed(2)) })) }}>

@@ -78,9 +78,9 @@ export default function QuoteDetailPage() {
           <Link href={`/quotes/${id}/edit`}>
             <Button size="sm" variant="outline"><Pencil className="w-3.5 h-3.5" />Edit</Button>
           </Link>
-          <Button size="sm" variant="outline" onClick={() => window.open(`/api/pdf/quote/${id}`, "_blank")}>
-            Download PDF
-          </Button>
+          <a href={`/api/pdf/quote/${id}`} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="outline">Download PDF</Button>
+          </a>
           {quote.status === "draft" && (
             <Button size="sm" onClick={markSent}>Mark as sent</Button>
           )}

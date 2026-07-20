@@ -133,7 +133,9 @@ export default function InvoiceDetailPage() {
       actions={
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant={statusColour[displayStatus] ?? "muted"}>{displayStatus}</Badge>
-          <Button size="sm" variant="outline" onClick={() => window.open(`/api/pdf/invoice/${id}`, "_blank")}>Download PDF</Button>
+          <a href={`/api/pdf/invoice/${id}`} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="outline">Download PDF</Button>
+          </a>
           {due > 0 && (
             <Button size="sm" onClick={() => { setShowPaymentForm(true); setPaymentForm(f => ({ ...f, amount: String(due.toFixed(2)) })) }}>
               Record payment
