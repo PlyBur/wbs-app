@@ -152,46 +152,33 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader><CardTitle className="text-sm">Payment terms (default for quotes)</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="terms_enabled"
-                checked={ws.default_terms_enabled === true}
-                onChange={e => set("default_terms_enabled", e.target.checked)}
-                className="w-4 h-4 rounded border-border"
-              />
-              <label htmlFor="terms_enabled" className="text-sm font-medium cursor-pointer">Enable payment terms by default</label>
-            </div>
-            {ws.default_terms_enabled && (
-              <div className="space-y-3">
-                {[
-                  { key: "deposit", label: "Deposit" },
-                  { key: "progress", label: "Progress payment" },
-                  { key: "final", label: "Final payment" },
-                ].map(term => (
-                  <div key={term.key} className="grid grid-cols-3 gap-3 items-end">
-                    <div>
-                      <label className="text-xs text-muted-foreground">Label</label>
-                      <Input
-                        value={ws[`default_terms_${term.key}_label`] ?? term.label}
-                        onChange={e => set(`default_terms_${term.key}_label`, e.target.value)}
-                        placeholder={term.label}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground">Percentage (%)</label>
-                      <Input
-                        type="number"
-                        value={ws[`default_terms_${term.key}_pct`] ?? ""}
-                        onChange={e => set(`default_terms_${term.key}_pct`, e.target.value ? parseFloat(e.target.value) : null)}
-                        min="0" max="100" placeholder="e.g. 30"
-                      />
-                    </div>
-                  </div>
-                ))}
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">These defaults pre-fill when creating a new quote with payment terms enabled.</p>
+            {[
+              { key: "deposit",  defaultLabel: "Deposit" },
+              { key: "progress", defaultLabel: "Progress payment" },
+              { key: "final",    defaultLabel: "Final payment on completion" },
+            ].map(term => (
+              <div key={term.key} className="grid grid-cols-3 gap-3 items-end">
+                <div className="col-span-2">
+                  <label className="text-xs text-muted-foreground">Label</label>
+                  <Input
+                    value={ws[`terms_${term.key}_label`] ?? term.defaultLabel}
+                    onChange={e => set(`terms_${term.key}_label`, e.target.value)}
+                    placeholder={term.defaultLabel}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">%</label>
+                  <Input
+                    type="number"
+                    value={ws[`terms_${term.key}_pct`] ?? ""}
+                    onChange={e => set(`terms_${term.key}_pct`, e.target.value ? parseFloat(e.target.value) : null)}
+                    min="0" max="100" placeholder="e.g. 30"
+                  />
+                </div>
               </div>
-            )}
+            ))}
           </CardContent>
         </Card>
 
