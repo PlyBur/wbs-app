@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Sidebar } from "./Sidebar"
 import { Header } from "./Header"
 import { Toaster } from "@/components/ui/Toaster"
+import { VoiceAssistant } from "@/components/ui/VoiceAssistant"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -58,6 +59,7 @@ export function DashboardLayout({ children, title, actions, user }: DashboardLay
         </main>
       </div>
       <Toaster />
+      <VoiceAssistant />
     </div>
   )
 }
