@@ -20,7 +20,7 @@ const navItems = [
   { label: "Clients",    href: "/clients",     icon: Users },
   { label: "Messages",   href: "/messages",    icon: MessageSquare },
   { label: "Invoices",   href: "/invoices",    icon: Receipt },
-  { label: "Calendar",   href: "/calendar",    icon: Calendar },
+  { label: "Calendar",   href: "/calendar",    icon: Calendar,    soon: true },
   { label: "Team",       href: "/team",        icon: UserCog },
 ]
 
@@ -84,7 +84,7 @@ export function Sidebar({ collapsed = false, onToggle, onClose }: SidebarProps) 
 
       {/* Nav */}
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto scrollbar-thin">
-        {navItems.map(({ label, href, icon: Icon }) => {
+        {navItems.map(({ label, href, icon: Icon, soon }) => {
           const active = pathname === href || pathname.startsWith(href + "/")
           return (
             <Link
@@ -100,8 +100,12 @@ export function Sidebar({ collapsed = false, onToggle, onClose }: SidebarProps) 
               title={collapsed ? label : undefined}
             >
               <Icon className="w-4 h-4 shrink-0" />
-              {/* Always show labels on mobile; respect collapsed on desktop */}
-              <span className={cn(collapsed ? "md:hidden" : "")}>{label}</span>
+              <span className={cn("flex-1", collapsed ? "md:hidden" : "")}>{label}</span>
+              {soon && !collapsed && (
+                <span className="hidden md:inline-flex text-[10px] px-1.5 py-0.5 rounded-full bg-sidebar-muted/40 text-sidebar-foreground/50 font-medium leading-none">
+                  Soon
+                </span>
+              )}
             </Link>
           )
         })}

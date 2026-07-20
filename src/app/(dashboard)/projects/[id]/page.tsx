@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Avatar } from "@/components/ui/avatar"
 import { formatZAR, shortDate } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "@/lib/toast"
+import { PageSkeleton } from "@/components/ui/skeleton"
 import {
   CheckCircle2, Circle, Clock, Trash2, Plus,
   MessageSquare, X, Download, CreditCard,
@@ -166,7 +168,7 @@ export default function ProjectDetailPage() {
       const { data: invs } = await supabase.from("invoices").select("*, invoice_line_items(*)").eq("project_id", id).order("created_at", { ascending: false })
       setInvoices(invs ?? [])
     } else {
-      alert(inv.error ?? "Failed to generate invoice")
+      toast(inv.error ?? "Failed to generate invoice", "error")
     }
     setGeneratingInvoice(null)
   }
@@ -200,7 +202,7 @@ export default function ProjectDetailPage() {
     })
     if (!res.ok) {
       const err = await res.json()
-      alert(err.error ?? "Failed to record payment")
+      toast(err.error ?? "Failed to record payment", "error")
     } else {
       const allInvIds = invoices.map(i => i.id)
       const [{ data: invs }, { data: allPmts }] = await Promise.all([
@@ -221,7 +223,7 @@ export default function ProjectDetailPage() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(interactionForm),
     })
     const data = await res.json()
-    if (!res.ok) { alert(data.error ?? "Failed to save interaction"); return }
+    if (!res.ok) { toast(data.error ?? "Failed to save interaction", "error"); return }
     setInteractions(i => [data, ...i])
     setShowInteractionForm(false)
     setInteractionForm({ interaction_date: new Date().toISOString().split("T")[0], type: "call", contact_person: "", summary: "", next_action: "", next_action_date: "" })
@@ -238,7 +240,7 @@ export default function ProjectDetailPage() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expenseForm),
     })
     const data = await res.json()
-    if (!res.ok) { alert(data.error ?? "Failed to save expense"); return }
+    if (!res.ok) { toast(data.error ?? "Failed to save expense", "error"); return }
     setExpenses(e => [data, ...e])
     setShowExpenseForm(false)
     setExpenseForm({ expense_date: new Date().toISOString().split("T")[0], category: "materials", description: "", supplier: "", quantity: 1, unit_cost: 0, notes: "" })
@@ -250,7 +252,7 @@ export default function ProjectDetailPage() {
   }
 
   if (!project) {
-    return <DashboardLayout title="Project"><p className="text-sm text-muted-foreground">Loading…</p></DashboardLayout>
+    return <DashboardLayout title="Project"><PageSkeleton /></DashboardLayout>
   }
 
   const client = project.clients as any
@@ -642,6 +644,47 @@ export default function ProjectDetailPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Margin summary */}
+        {quote && expenses.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Project margin</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              {(() => {
+                const revenue = quote.total ?? 0
+                const profit = revenue - totalExpenses
+                const marginPct = revenue > 0 ? Math.round((profit / revenue) * 100) : 0
+                const marginColour = marginPct >= 30 ? "text-success" : marginPct >= 10 ? "text-warning" : "text-destructive"
+                return (
+                  <div className="px-5 py-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Quote value</span>
+                      <span className="font-medium">{formatZAR(revenue)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total expenses</span>
+                      <span className="font-medium text-destructive">−{formatZAR(totalExpenses)}</span>
+                    </div>
+                    <div className="border-t border-border pt-2 flex justify-between font-semibold">
+                      <span>Estimated profit</span>
+                      <span className={marginColour}>{formatZAR(profit)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Margin</span>
+                      <span className={`font-semibold ${marginColour}`}>{marginPct}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden mt-1">
+                      <div
+                        className={`h-full rounded-full ${marginPct >= 30 ? "bg-success" : marginPct >= 10 ? "bg-warning" : "bg-destructive"}`}
+                        style={{ width: `${Math.min(100, Math.max(0, marginPct))}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })()}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Interactions */}
         <Card>

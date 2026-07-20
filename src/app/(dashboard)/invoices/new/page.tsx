@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatZAR } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "@/lib/toast"
 import { Plus, Trash2 } from "lucide-react"
 
 interface LineItem { title: string; description: string; quantity: number; unit_price: number; is_taxable: boolean }
@@ -49,7 +50,7 @@ export default function NewInvoicePage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    if (!clientId) { alert("Please select a client"); return }
+    if (!clientId) { toast("Please select a client", "error"); return }
     setSaving(true)
     const { data: ws } = await supabase.from("workspaces").select("id").single()
     const { data: inv, error } = await supabase.from("invoices").insert({
@@ -61,7 +62,7 @@ export default function NewInvoicePage() {
       vat_rate: vatRate, vat_amount: vatAmount, total,
       due_date: dueDate, notes,
     }).select().single()
-    if (error || !inv) { alert(error?.message ?? "Failed"); setSaving(false); return }
+    if (error || !inv) { toast(error?.message ?? "Failed to create invoice", "error"); setSaving(false); return }
     if (items.filter(i => i.title.trim()).length > 0) {
       await supabase.from("invoice_line_items").insert(
         items.filter(i => i.title.trim()).map((item, idx) => ({

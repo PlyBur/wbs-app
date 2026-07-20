@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatZAR, shortDate } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { PageSkeleton } from "@/components/ui/skeleton"
 import { Mail, Phone, Building2, MapPin, Pencil, Trash2, X, Check } from "lucide-react"
 import Link from "next/link"
 
@@ -46,7 +47,7 @@ export default function ClientDetailPage() {
     router.push("/clients")
   }
 
-  if (!client) return <DashboardLayout title="Client"><p className="text-sm text-muted-foreground">Loading…</p></DashboardLayout>
+  if (!client) return <DashboardLayout title="Client"><PageSkeleton /></DashboardLayout>
 
   const statusColourQ: Record<string, any> = { draft: "muted", sent: "default", accepted: "success", declined: "destructive", expired: "warning" }
   const statusColourP: Record<string, any> = { pending: "muted", active: "default", on_hold: "warning", completed: "success" }

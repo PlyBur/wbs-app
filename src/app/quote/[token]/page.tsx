@@ -13,6 +13,7 @@ export default async function PublicQuotePage({ params }: { params: { token: str
 
   if (!quote) notFound()
 
+  const isExpired = quote.expires_at && new Date(quote.expires_at) < new Date()
   const ws = quote.workspaces as any
   const cl = quote.clients as any
   const items: any[] = [...((quote.quote_line_items as any[]) ?? [])].sort((a, b) => a.sort_order - b.sort_order)
@@ -110,15 +111,26 @@ export default async function PublicQuotePage({ params }: { params: { token: str
           </div>
         )}
 
-        {/* Accept button */}
-        {(quote.status === "sent" || quote.status === "draft") && (
-          <AcceptQuoteButton quoteId={quote.id} token={params.token} />
-        )}
+        {/* Accept / status banner */}
         {quote.status === "accepted" && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-5 text-center">
             <p className="text-green-700 font-semibold">✓ Quote accepted</p>
             <p className="text-green-600 text-sm mt-1">Thank you! We will be in touch shortly.</p>
           </div>
+        )}
+        {quote.status === "declined" && (
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 text-center">
+            <p className="text-gray-600 font-semibold">Quote declined</p>
+          </div>
+        )}
+        {isExpired && quote.status !== "accepted" && quote.status !== "declined" && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
+            <p className="text-amber-700 font-semibold">This quote has expired</p>
+            <p className="text-amber-600 text-sm mt-1">Please contact us to request an updated quote.</p>
+          </div>
+        )}
+        {!isExpired && (quote.status === "sent" || quote.status === "draft") && (
+          <AcceptQuoteButton quoteId={quote.id} token={params.token} />
         )}
 
         <p className="text-center text-xs text-gray-400 pb-4">

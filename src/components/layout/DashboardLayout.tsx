@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Sidebar } from "./Sidebar"
 import { Header } from "./Header"
+import { Toaster } from "@/components/ui/Toaster"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -50,6 +51,7 @@ export function DashboardLayout({ children, title, actions, user }: DashboardLay
           {children}
         </main>
       </div>
+      <Toaster />
     </div>
   )
 }

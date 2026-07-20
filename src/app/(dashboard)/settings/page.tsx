@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
+import { PageSkeleton } from "@/components/ui/skeleton"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,7 +45,7 @@ export default function SettingsPage() {
     setWs((w: any) => ({ ...w, [key]: val }))
   }
 
-  if (!ws) return <DashboardLayout title="Settings"><p className="text-sm text-muted-foreground">Loading…</p></DashboardLayout>
+  if (!ws) return <DashboardLayout title="Settings"><PageSkeleton /></DashboardLayout>
 
   return (
     <DashboardLayout title="Settings">

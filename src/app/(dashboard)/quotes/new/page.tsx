@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatZAR } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "@/lib/toast"
 import { Plus, Trash2 } from "lucide-react"
 
 interface LineItem { title: string; description: string; quantity: number; unit_price: number; is_taxable: boolean }
@@ -68,7 +69,7 @@ export default function NewQuotePage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    if (!clientId) { alert("Please select a client"); return }
+    if (!clientId) { toast("Please select a client", "error"); return }
     setSaving(true)
     const { data: ws } = await supabase.from("workspaces").select("id").single()
     const { data: quote, error } = await supabase.from("quotes").insert({
@@ -88,7 +89,7 @@ export default function NewQuotePage() {
       terms_final_label: termsEnabled ? terms.final_label : null,
       terms_final_pct: termsEnabled ? terms.final_pct : null,
     }).select().single()
-    if (error || !quote) { alert(error?.message ?? "Failed"); setSaving(false); return }
+    if (error || !quote) { toast(error?.message ?? "Failed to save quote", "error"); setSaving(false); return }
     if (items.filter(i => i.title.trim()).length > 0) {
       await supabase.from("quote_line_items").insert(
         items.filter(i => i.title.trim()).map((item, idx) => ({

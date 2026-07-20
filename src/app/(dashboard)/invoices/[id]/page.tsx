@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatZAR, shortDate } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "@/lib/toast"
+import { PageSkeleton } from "@/components/ui/skeleton"
 import { Mail, Building2, Trash2, X } from "lucide-react"
 
 const statusColour: Record<string, any> = { draft: "muted", issued: "default", sent: "default", paid: "success", overdue: "destructive", cancelled: "muted" }
@@ -99,7 +101,7 @@ export default function InvoiceDetailPage() {
       setPaymentForm({ amount: "", method: "eft", reference: "", notes: "" })
     } else {
       const err = await res.json()
-      alert(err.error ?? "Failed to record payment")
+      toast(err.error ?? "Failed to record payment", "error")
     }
     setSavingPayment(false)
   }
@@ -111,7 +113,7 @@ export default function InvoiceDetailPage() {
     router.push("/invoices")
   }
 
-  if (!invoice) return <DashboardLayout title="Invoice"><p className="text-sm text-muted-foreground">Loading…</p></DashboardLayout>
+  if (!invoice) return <DashboardLayout title="Invoice"><PageSkeleton /></DashboardLayout>
 
   const client = invoice.clients as any
   const lineItems: any[] = [...((invoice.invoice_line_items as any[]) ?? [])].sort((a, b) => a.sort_order - b.sort_order)

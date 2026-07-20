@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { formatZAR } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { PageSkeleton } from "@/components/ui/skeleton"
 import { Pencil, Check, X, Trash2 } from "lucide-react"
 
 export default function ServiceDetailPage() {
@@ -40,7 +41,7 @@ export default function ServiceDetailPage() {
     router.push("/services")
   }
 
-  if (!service) return <DashboardLayout title="Service"><p className="text-muted-foreground text-sm">Loading…</p></DashboardLayout>
+  if (!service) return <DashboardLayout title="Service"><PageSkeleton /></DashboardLayout>
 
   return (
     <DashboardLayout

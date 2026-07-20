@@ -8,7 +8,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatZAR, shortDate } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { Mail, Phone, Building2, Pencil, Trash2 } from "lucide-react"
+import { toast } from "@/lib/toast"
+import { PageSkeleton } from "@/components/ui/skeleton"
+import { Mail, Phone, Building2, Pencil, Trash2, Copy } from "lucide-react"
 import Link from "next/link"
 
 const statusColour: Record<string, any> = {
@@ -49,7 +51,7 @@ export default function QuoteDetailPage() {
     })
     const project = await res.json()
     if (project.id) router.push(`/projects/${project.id}`)
-    else { alert(project.error ?? "Conversion failed"); setConverting(false) }
+    else { toast(project.error ?? "Conversion failed", "error"); setConverting(false) }
   }
 
   async function deleteQuote() {
@@ -60,7 +62,7 @@ export default function QuoteDetailPage() {
   }
 
   if (!quote) {
-    return <DashboardLayout title="Quote"><p className="text-sm text-muted-foreground">Loading…</p></DashboardLayout>
+    return <DashboardLayout title="Quote"><PageSkeleton /></DashboardLayout>
   }
 
   const client = quote.clients as any
@@ -94,7 +96,7 @@ export default function QuoteDetailPage() {
             </Button>
           )}
           {quote.status === "sent" && (
-            <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(publicUrl); alert("Client link copied!") }}>
+            <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(publicUrl); toast("Client link copied!", "success") }}>
               Copy client link
             </Button>
           )}
