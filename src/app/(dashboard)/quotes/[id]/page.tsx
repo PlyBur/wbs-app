@@ -75,7 +75,7 @@ export default function QuoteDetailPage() {
     <DashboardLayout
       title={quote.doc_number ?? "Quote"}
       actions={
-        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+        <div className="flex items-center gap-1.5">
           <Badge variant={statusColour[quote.status] ?? "muted"}>{quote.status}</Badge>
           <Link href={`/quotes/${id}/edit`}>
             <Button size="sm" variant="outline"><Pencil className="w-3.5 h-3.5" />Edit</Button>

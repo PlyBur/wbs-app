@@ -268,7 +268,7 @@ export default function ProjectDetailPage() {
     <DashboardLayout
       title={project.title ?? "Project"}
       actions={
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <Badge variant={statusColour[project.status] ?? "muted"}>{project.status}</Badge>
           <select value={project.status} onChange={e => updateStatus(e.target.value)}
             className="border border-border rounded-lg px-2 py-1 text-xs bg-card focus:outline-none">

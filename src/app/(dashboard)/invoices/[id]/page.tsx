@@ -133,7 +133,7 @@ export default function InvoiceDetailPage() {
     <DashboardLayout
       title={invoice.doc_number ?? "Invoice"}
       actions={
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <Badge variant={statusColour[displayStatus] ?? "muted"}>{displayStatus}</Badge>
           <a href={`/api/pdf/invoice/${id}`} target="_blank" rel="noopener noreferrer">
             <Button size="sm" variant="outline">Download PDF</Button>

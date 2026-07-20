@@ -25,8 +25,9 @@ export function Header({ title, user, actions, onMenuClick }: HeaderProps) {
 
       <h1 className="font-semibold text-base flex-1 truncate">{title}</h1>
 
+      {/* Actions — desktop only; mobile gets the strip below the header */}
       {actions && (
-        <div className="flex items-center gap-2 flex-wrap justify-end">{actions}</div>
+        <div className="hidden sm:flex items-center gap-2 flex-wrap justify-end">{actions}</div>
       )}
 
       <div className="flex items-center gap-2 shrink-0">

@@ -47,6 +47,12 @@ export function DashboardLayout({ children, title, actions, user }: DashboardLay
           actions={actions}
           onMenuClick={() => setMobileOpen(o => !o)}
         />
+        {/* Mobile action strip — shown only on small screens when actions exist */}
+        {actions && (
+          <div className="sm:hidden flex items-center gap-2 px-4 py-2 border-b border-border bg-card overflow-x-auto scrollbar-none shrink-0">
+            {actions}
+          </div>
+        )}
         <main className="flex-1 overflow-y-auto p-4 md:p-5 scrollbar-thin">
           {children}
         </main>
