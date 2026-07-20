@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { PDFDocument, StandardFonts, rgb, PageSizes } from "pdf-lib"
+
+const blue = rgb(0.145, 0.388, 0.922)   // #2563EB
+const gray = rgb(0.42, 0.447, 0.502)    // #6B7280
+const lgray = rgb(0.953, 0.957, 0.965)  // #F3F4F6
+const black = rgb(0.067, 0.094, 0.153)  // #111827
+const green = rgb(0.086, 0.502, 0.247)  // #166534
 
 const fzar = (n: number) => {
   const [i, d] = (n || 0).toFixed(2).split(".")
@@ -22,156 +29,143 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   const items: any[] = [...((q.quote_line_items as any[]) ?? [])].sort((a, b) => a.sort_order - b.sort_order)
   const vatOn = ws?.vat_registered !== false
 
-  // Dynamic import so pdfkit is only loaded server-side
-  const PDFDocument = (await import("pdfkit")).default
+  const pdfDoc = await PDFDocument.create()
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-  const doc = new PDFDocument({ margin: 40, size: "A4" })
-  const chunks: Buffer[] = []
-  doc.on("data", (chunk: Buffer) => chunks.push(chunk))
+  const page = pdfDoc.addPage(PageSizes.A4)
+  const { width, height } = page.getSize()
+  const L = 40        // left margin
+  const R = width - 40 // right edge
+  const W = R - L     // usable width
 
-  await new Promise<void>((resolve) => {
-    doc.on("end", resolve)
+  let y = height - 40
 
-    const W = 515 // usable width
-    const blue = "#2563EB"
-    const gray = "#6B7280"
-    const lightgray = "#F3F4F6"
-    const black = "#111827"
+  // ── Logo box ─────────────────────────────────────────────────────────────
+  page.drawRectangle({ x: L, y: y - 36, width: 36, height: 36, color: blue })
+  page.drawText("W", { x: L + 10, y: y - 24, size: 18, font: fontBold, color: rgb(1,1,1) })
 
-    // ── Header ──────────────────────────────────────────────────────────────
-    // Logo placeholder (blue square)
-    doc.rect(40, 40, 36, 36).fill(blue)
-    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(18).text("W", 40, 47, { width: 36, align: "center" })
+  // Business name
+  page.drawText(ws?.name ?? "", { x: L + 44, y: y - 12, size: 12, font: fontBold, color: black })
+  if (vatOn && ws?.vat_number) {
+    page.drawText(`VAT: ${ws.vat_number}`, { x: L + 44, y: y - 26, size: 8, font, color: gray })
+  }
 
-    // Business name
-    doc.fillColor(black).font("Helvetica-Bold").fontSize(12).text(ws?.name ?? "", 85, 42)
-    if (vatOn && ws?.vat_number) {
-      doc.fillColor(gray).font("Helvetica").fontSize(9).text(`VAT: ${ws.vat_number}`, 85, 57)
-    }
+  // QUOTE (right aligned)
+  const quoteLabelW = fontBold.widthOfTextAtSize("QUOTE", 26)
+  page.drawText("QUOTE", { x: R - quoteLabelW, y: y - 12, size: 26, font: fontBold, color: blue })
+  const docNumW = font.widthOfTextAtSize(q.doc_number ?? "", 9)
+  page.drawText(q.doc_number ?? "", { x: R - docNumW, y: y - 36, size: 9, font, color: gray })
+  const dateStr = `Date: ${fdate(q.created_at)}`
+  page.drawText(dateStr, { x: R - font.widthOfTextAtSize(dateStr, 9), y: y - 47, size: 9, font, color: gray })
+  const expStr = `Expires: ${fdate(q.expires_at)}`
+  page.drawText(expStr, { x: R - font.widthOfTextAtSize(expStr, 9), y: y - 58, size: 9, font, color: gray })
 
-    // QUOTE label (right)
-    doc.fillColor(blue).font("Helvetica-Bold").fontSize(26).text("QUOTE", 40, 40, { align: "right", width: W })
-    doc.fillColor(gray).font("Helvetica").fontSize(9)
-    doc.text(q.doc_number ?? "", 40, 70, { align: "right", width: W })
-    doc.text(`Date: ${fdate(q.created_at)}`, 40, 82, { align: "right", width: W })
-    doc.text(`Expires: ${fdate(q.expires_at)}`, 40, 94, { align: "right", width: W })
+  y -= 60
 
-    doc.moveDown(3)
+  // ── Meta box ─────────────────────────────────────────────────────────────
+  y -= 12
+  page.drawRectangle({ x: L, y: y - 60, width: W, height: 60, color: lgray })
+  page.drawText("PREPARED FOR", { x: L + 12, y: y - 14, size: 7, font, color: gray })
+  page.drawText(cl?.name ?? "", { x: L + 12, y: y - 26, size: 10, font: fontBold, color: black })
+  const clientSub = [cl?.company, cl?.email].filter(Boolean).join("  ·  ")
+  if (clientSub) page.drawText(clientSub, { x: L + 12, y: y - 38, size: 8, font, color: gray })
 
-    // ── Meta box ─────────────────────────────────────────────────────────────
-    const metaY = 110
-    doc.rect(40, metaY, W, 64).fill(lightgray)
+  page.drawText("QUOTE TOTAL", { x: L + 290, y: y - 14, size: 7, font, color: gray })
+  page.drawText(fzar(q.total), { x: L + 290, y: y - 30, size: 16, font: fontBold, color: blue })
+  if (q.project_title) page.drawText(q.project_title, { x: L + 290, y: y - 44, size: 8, font, color: gray })
 
-    // Prepared for
-    doc.fillColor(gray).font("Helvetica").fontSize(8).text("PREPARED FOR", 52, metaY + 10)
-    doc.fillColor(black).font("Helvetica-Bold").fontSize(10).text(cl?.name ?? "", 52, metaY + 22)
-    const clientLines = [cl?.company, cl?.email].filter(Boolean).join("  ·  ")
-    if (clientLines) doc.fillColor(gray).font("Helvetica").fontSize(9).text(clientLines, 52, metaY + 35)
+  y -= 74
 
-    // Quote total
-    doc.fillColor(gray).font("Helvetica").fontSize(8).text("QUOTE TOTAL", 320, metaY + 10)
-    doc.fillColor(blue).font("Helvetica-Bold").fontSize(16).text(fzar(q.total), 320, metaY + 22)
-    if (q.project_title) {
-      doc.fillColor(gray).font("Helvetica").fontSize(9).text(q.project_title, 320, metaY + 42)
-    }
+  // ── Line items table ──────────────────────────────────────────────────────
+  // Header
+  page.drawRectangle({ x: L, y: y - 18, width: W, height: 18, color: lgray })
+  page.drawText("ITEM",       { x: L + 8,   y: y - 12, size: 7, font, color: gray })
+  page.drawText("QTY",        { x: L + 310, y: y - 12, size: 7, font, color: gray })
+  page.drawText("UNIT PRICE", { x: L + 360, y: y - 12, size: 7, font, color: gray })
+  page.drawText("TOTAL",      { x: L + 450, y: y - 12, size: 7, font, color: gray })
+  y -= 18
 
-    // ── Line items table ──────────────────────────────────────────────────────
-    const tableY = metaY + 78
-    const col = { item: 40, qty: 350, up: 400, total: 475 }
+  items.forEach((item) => {
+    const title = item.title || item.description || "Item"
+    const desc = item.title && item.description ? item.description : null
+    const rowH = desc ? 30 : 20
 
-    // Table header
-    doc.rect(40, tableY, W, 20).fill(lightgray)
-    doc.fillColor(gray).font("Helvetica").fontSize(8)
-    doc.text("ITEM", col.item + 8, tableY + 6)
-    doc.text("QTY", col.qty, tableY + 6, { width: 45, align: "right" })
-    doc.text("UNIT PRICE", col.up, tableY + 6, { width: 65, align: "right" })
-    doc.text("TOTAL", col.total, tableY + 6, { width: 40, align: "right" })
-
-    let rowY = tableY + 20
-    items.forEach((item) => {
-      const title = item.title || item.description || "Item"
-      const desc = item.title && item.description ? item.description : null
-      const rowH = desc ? 32 : 20
-
-      doc.rect(40, rowY, W, rowH).stroke("#E5E7EB")
-      doc.fillColor(black).font("Helvetica-Bold").fontSize(9).text(title, col.item + 8, rowY + 5, { width: 290 })
-      if (desc) {
-        doc.fillColor(gray).font("Helvetica").fontSize(8).text(desc, col.item + 8, rowY + 17, { width: 290 })
-      }
-      doc.fillColor(black).font("Helvetica").fontSize(9)
-      doc.text(String(item.quantity), col.qty, rowY + 5, { width: 45, align: "right" })
-      doc.text(fzar(item.unit_price), col.up, rowY + 5, { width: 65, align: "right" })
-      doc.text(fzar(item.quantity * item.unit_price), col.total, rowY + 5, { width: 40, align: "right" })
-      rowY += rowH
-    })
-
-    if (items.length === 0) {
-      doc.fillColor(gray).font("Helvetica").fontSize(9).text("No line items", col.item + 8, rowY + 5)
-      rowY += 20
-    }
-
-    // ── Totals ────────────────────────────────────────────────────────────────
-    rowY += 8
-    const totX = 350
-
-    const addTotRow = (label: string, value: string, bold = false) => {
-      doc.fillColor(bold ? black : gray)
-        .font(bold ? "Helvetica-Bold" : "Helvetica")
-        .fontSize(bold ? 11 : 9)
-      doc.text(label, totX, rowY, { width: 120 })
-      doc.text(value, totX, rowY, { width: 120 + 35, align: "right" })
-      if (bold) {
-        doc.moveTo(totX, rowY - 4).lineTo(totX + 155, rowY - 4).strokeColor("#111827").lineWidth(1).stroke()
-      }
-      rowY += bold ? 16 : 13
-    }
-
-    addTotRow("Subtotal", fzar(q.subtotal))
-    if (q.travel_cost > 0) addTotRow("Travel", fzar(q.travel_cost))
-    if (q.discount_amount > 0) addTotRow("Discount", `-${fzar(q.discount_amount)}`)
-    if (vatOn) addTotRow(`VAT (${q.vat_rate}%)`, fzar(q.vat_amount))
-    addTotRow(vatOn ? "Total (incl. VAT)" : "Total", fzar(q.total), true)
-
-    // ── Payment schedule (if terms enabled) ───────────────────────────────────
-    if (q.terms_enabled) {
-      rowY += 12
-      doc.fillColor(gray).font("Helvetica").fontSize(8).text("PAYMENT SCHEDULE", 40, rowY)
-      rowY += 12
-
-      const termDefs = [
-        { label: q.terms_deposit_label ?? "Deposit",                  pct: q.terms_deposit_pct },
-        { label: q.terms_progress_label ?? "Progress payment",        pct: q.terms_progress_pct },
-        { label: q.terms_final_label ?? "Final payment on completion", pct: q.terms_final_pct },
-      ].filter(t => t.pct)
-
-      termDefs.forEach(t => {
-        doc.rect(40, rowY, W, 18).fill("#F0FDF4")
-        doc.fillColor("#166534").font("Helvetica-Bold").fontSize(9)
-          .text(`${t.label} (${t.pct}%)`, 52, rowY + 4, { width: 300 })
-        doc.text(fzar(q.total * t.pct / 100), 52, rowY + 4, { width: W - 24, align: "right" })
-        rowY += 18
-      })
-    }
-
-    // ── Notes ─────────────────────────────────────────────────────────────────
-    if (q.notes) {
-      rowY += 12
-      doc.fillColor(gray).font("Helvetica").fontSize(8).text("NOTES", 40, rowY)
-      rowY += 10
-      doc.fillColor(black).font("Helvetica").fontSize(9).text(q.notes, 40, rowY, { width: W })
-    }
-
-    // ── Footer ────────────────────────────────────────────────────────────────
-    const footerY = 760
-    doc.moveTo(40, footerY).lineTo(555, footerY).strokeColor("#E5E7EB").lineWidth(0.5).stroke()
-    const footParts = [ws?.name, ws?.registration_number ? `Reg: ${ws.registration_number}` : null, vatOn && ws?.vat_number ? `VAT: ${ws.vat_number}` : null].filter(Boolean).join("  ·  ")
-    doc.fillColor(gray).font("Helvetica").fontSize(8).text(footParts, 40, footerY + 6, { align: "center", width: W })
-
-    doc.end()
+    page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.5, color: lgray })
+    page.drawText(title.substring(0, 55), { x: L + 8, y: y - 12, size: 9, font: fontBold, color: black })
+    if (desc) page.drawText(desc.substring(0, 65), { x: L + 8, y: y - 23, size: 7, font, color: gray })
+    page.drawText(String(item.quantity), { x: L + 310, y: y - 12, size: 9, font, color: black })
+    page.drawText(fzar(item.unit_price), { x: L + 355, y: y - 12, size: 9, font, color: black })
+    page.drawText(fzar(item.quantity * item.unit_price), { x: L + 445, y: y - 12, size: 9, font: fontBold, color: black })
+    y -= rowH
   })
 
-  const pdfBuffer = Buffer.concat(chunks)
-  return new Response(pdfBuffer, {
+  if (items.length === 0) {
+    page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.5, color: lgray })
+    page.drawText("No line items", { x: L + 8, y: y - 12, size: 9, font, color: gray })
+    y -= 20
+  }
+
+  // ── Totals ────────────────────────────────────────────────────────────────
+  y -= 10
+  const totX = L + 330
+
+  const drawTot = (label: string, value: string, bold = false) => {
+    const f = bold ? fontBold : font
+    const sz = bold ? 11 : 9
+    const col = bold ? black : gray
+    if (bold) {
+      page.drawLine({ start: { x: totX, y: y + 4 }, end: { x: R, y: y + 4 }, thickness: 0.8, color: black })
+      y -= 4
+    }
+    page.drawText(label, { x: totX, y, size: sz, font: f, color: col })
+    const vW = f.widthOfTextAtSize(value, sz)
+    page.drawText(value, { x: R - vW, y, size: sz, font: f, color: col })
+    y -= bold ? 16 : 13
+  }
+
+  drawTot("Subtotal", fzar(q.subtotal))
+  if (q.travel_cost > 0) drawTot("Travel", fzar(q.travel_cost))
+  if (q.discount_amount > 0) drawTot("Discount", `-${fzar(q.discount_amount)}`)
+  if (vatOn) drawTot(`VAT (${q.vat_rate}%)`, fzar(q.vat_amount))
+  drawTot(vatOn ? "Total (incl. VAT)" : "Total", fzar(q.total), true)
+
+  // ── Payment schedule ──────────────────────────────────────────────────────
+  if (q.terms_enabled) {
+    y -= 16
+    page.drawText("PAYMENT SCHEDULE", { x: L, y, size: 7, font, color: gray })
+    y -= 10
+    const termDefs = [
+      { label: q.terms_deposit_label  ?? "Deposit",                    pct: q.terms_deposit_pct },
+      { label: q.terms_progress_label ?? "Progress payment",           pct: q.terms_progress_pct },
+      { label: q.terms_final_label    ?? "Final payment on completion", pct: q.terms_final_pct },
+    ].filter(t => t.pct)
+    termDefs.forEach(t => {
+      page.drawRectangle({ x: L, y: y - 16, width: W, height: 16, color: rgb(0.94, 0.99, 0.96) })
+      page.drawText(`${t.label} (${t.pct}%)`, { x: L + 8, y: y - 11, size: 9, font: fontBold, color: green })
+      const amt = fzar(q.total * t.pct / 100)
+      page.drawText(amt, { x: R - fontBold.widthOfTextAtSize(amt, 9), y: y - 11, size: 9, font: fontBold, color: green })
+      y -= 16
+    })
+  }
+
+  // ── Notes ─────────────────────────────────────────────────────────────────
+  if (q.notes) {
+    y -= 14
+    page.drawText("NOTES", { x: L, y, size: 7, font, color: gray })
+    y -= 12
+    page.drawText(q.notes.substring(0, 200), { x: L, y, size: 9, font, color: black, maxWidth: W, lineHeight: 14 })
+  }
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  const footY = 30
+  page.drawLine({ start: { x: L, y: footY + 14 }, end: { x: R, y: footY + 14 }, thickness: 0.5, color: lgray })
+  const footParts = [ws?.name, ws?.registration_number ? `Reg: ${ws.registration_number}` : null, vatOn && ws?.vat_number ? `VAT: ${ws.vat_number}` : null].filter(Boolean).join("  ·  ")
+  const footW = font.widthOfTextAtSize(footParts, 8)
+  page.drawText(footParts, { x: (width - footW) / 2, y: footY, size: 8, font, color: gray })
+
+  const pdfBytes = await pdfDoc.save()
+  return new Response(pdfBytes, {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="Quote-${q.doc_number ?? "quote"}.pdf"`,

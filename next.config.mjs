@@ -5,7 +5,6 @@ const nextConfig = {
       { protocol: "https", hostname: "*.supabase.co" },
     ],
   },
-  serverExternalPackages: ["pdfkit"],
 };
 
 export default nextConfig;

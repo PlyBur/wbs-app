@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { PDFDocument, StandardFonts, rgb, PageSizes } from "pdf-lib"
+
+const blue  = rgb(0.145, 0.388, 0.922)
+const gray  = rgb(0.42,  0.447, 0.502)
+const lgray = rgb(0.953, 0.957, 0.965)
+const black = rgb(0.067, 0.094, 0.153)
+const green = rgb(0.086, 0.502, 0.247)
+const amber = rgb(0.851, 0.592, 0.024)
 
 const fzar = (n: number) => {
   const [i, d] = (n || 0).toFixed(2).split(".")
@@ -16,219 +24,194 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   ])
   if (!inv) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  const ws = inv.workspaces as any
-  const cl = inv.clients as any
+  const ws  = inv.workspaces as any
+  const cl  = inv.clients as any
   const items: any[] = [...((inv.invoice_line_items as any[]) ?? [])].sort((a, b) => a.sort_order - b.sort_order)
   const paid = (pmts ?? []).reduce((s: number, p: any) => s + p.amount, 0)
-  const due = Math.max(0, inv.total - paid)
+  const due  = Math.max(0, inv.total - paid)
   const vatOn = ws?.vat_registered !== false
 
   // Load payment schedule for term invoices
-  let termSchedule: { label: string; pct: number; amount: number; status: string; docNumber?: string }[] = []
+  let termSchedule: { label: string; pct: number; amount: number; status: string; isCurrent: boolean }[] = []
   if (inv.term_type && inv.project_id) {
     const { data: project } = await supabase.from("projects").select("*, quotes(*)").eq("id", inv.project_id).single()
     const quote = project?.quotes as any
     if (quote?.terms_enabled) {
       const { data: allTermInvoices } = await supabase
-        .from("invoices")
-        .select("id, term_type, term_label, total, status, doc_number")
-        .eq("project_id", inv.project_id)
-        .not("term_type", "is", null)
+        .from("invoices").select("id, term_type, total, doc_number").eq("project_id", inv.project_id).not("term_type", "is", null)
       const termInvIds = (allTermInvoices ?? []).map((i: any) => i.id)
       const { data: allPayments } = termInvIds.length > 0
         ? await supabase.from("payments").select("invoice_id, amount").in("invoice_id", termInvIds)
         : { data: [] }
-      const paymentsByInv: Record<string, number> = {}
-      ;(allPayments ?? []).forEach((p: any) => {
-        paymentsByInv[p.invoice_id] = (paymentsByInv[p.invoice_id] ?? 0) + p.amount
-      })
+      const payByInv: Record<string, number> = {}
+      ;(allPayments ?? []).forEach((p: any) => { payByInv[p.invoice_id] = (payByInv[p.invoice_id] ?? 0) + p.amount })
       const termDefs = [
         { key: "deposit",  label: quote.terms_deposit_label  ?? "Deposit",                    pct: quote.terms_deposit_pct },
         { key: "progress", label: quote.terms_progress_label ?? "Progress payment",            pct: quote.terms_progress_pct },
         { key: "final",    label: quote.terms_final_label    ?? "Final payment on completion", pct: quote.terms_final_pct },
       ].filter((t: any) => t.pct)
-
       termSchedule = termDefs.map((term: any) => {
-        const termInv = (allTermInvoices ?? []).find((i: any) => i.term_type === term.key) as any
+        const ti = (allTermInvoices ?? []).find((i: any) => i.term_type === term.key) as any
         const amount = Math.round(quote.total * term.pct / 100 * 100) / 100
         let status = "Not invoiced"
-        if (termInv) {
-          const paidAmt = paymentsByInv[termInv.id] ?? 0
-          status = paidAmt >= termInv.total ? "Paid" : `Issued (${termInv.doc_number})`
-        }
-        return { label: term.label, pct: term.pct, amount, status, docNumber: termInv?.doc_number }
+        if (ti) { status = (payByInv[ti.id] ?? 0) >= ti.total ? "Paid" : `Issued (${ti.doc_number})` }
+        return { label: term.label, pct: term.pct, amount, status, isCurrent: term.key === inv.term_type }
       })
     }
   }
 
-  const PDFDocument = (await import("pdfkit")).default
-  const doc = new PDFDocument({ margin: 40, size: "A4" })
-  const chunks: Buffer[] = []
-  doc.on("data", (chunk: Buffer) => chunks.push(chunk))
+  const pdfDoc = await PDFDocument.create()
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-  await new Promise<void>((resolve) => {
-    doc.on("end", resolve)
+  const page = pdfDoc.addPage(PageSizes.A4)
+  const { width, height } = page.getSize()
+  const L = 40
+  const R = width - 40
+  const W = R - L
 
-    const W = 515
-    const blue = "#2563EB"
-    const gray = "#6B7280"
-    const lightgray = "#F3F4F6"
-    const black = "#111827"
+  let y = height - 40
 
-    // ── Header ──────────────────────────────────────────────────────────────
-    doc.rect(40, 40, 36, 36).fill(blue)
-    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(18).text("W", 40, 47, { width: 36, align: "center" })
+  // ── Header ───────────────────────────────────────────────────────────────
+  page.drawRectangle({ x: L, y: y - 36, width: 36, height: 36, color: blue })
+  page.drawText("W", { x: L + 10, y: y - 24, size: 18, font: fontBold, color: rgb(1,1,1) })
+  page.drawText(ws?.name ?? "", { x: L + 44, y: y - 12, size: 12, font: fontBold, color: black })
+  if (vatOn && ws?.vat_number) {
+    page.drawText(`VAT: ${ws.vat_number}`, { x: L + 44, y: y - 26, size: 8, font, color: gray })
+  }
 
-    doc.fillColor(black).font("Helvetica-Bold").fontSize(12).text(ws?.name ?? "", 85, 42)
-    if (vatOn && ws?.vat_number) {
-      doc.fillColor(gray).font("Helvetica").fontSize(9).text(`VAT: ${ws.vat_number}`, 85, 57)
-    }
+  const invLabel = "INVOICE"
+  page.drawText(invLabel, { x: R - fontBold.widthOfTextAtSize(invLabel, 26), y: y - 12, size: 26, font: fontBold, color: blue })
+  page.drawText(inv.doc_number ?? "", { x: R - font.widthOfTextAtSize(inv.doc_number ?? "", 9), y: y - 36, size: 9, font, color: gray })
+  const issued = `Issued: ${fdate(inv.created_at)}`
+  page.drawText(issued, { x: R - font.widthOfTextAtSize(issued, 9), y: y - 47, size: 9, font, color: gray })
+  const dueStr = `Due: ${fdate(inv.due_date)}`
+  page.drawText(dueStr, { x: R - font.widthOfTextAtSize(dueStr, 9), y: y - 58, size: 9, font, color: gray })
+  y -= 60
 
-    doc.fillColor(blue).font("Helvetica-Bold").fontSize(26).text("INVOICE", 40, 40, { align: "right", width: W })
-    doc.fillColor(gray).font("Helvetica").fontSize(9)
-    doc.text(inv.doc_number ?? "", 40, 70, { align: "right", width: W })
-    doc.text(`Issued: ${fdate(inv.created_at)}`, 40, 82, { align: "right", width: W })
-    doc.text(`Due: ${fdate(inv.due_date)}`, 40, 94, { align: "right", width: W })
+  // ── Meta box ──────────────────────────────────────────────────────────────
+  y -= 12
+  page.drawRectangle({ x: L, y: y - 60, width: W, height: 60, color: lgray })
+  page.drawText("BILL TO", { x: L + 12, y: y - 14, size: 7, font, color: gray })
+  page.drawText(cl?.name ?? "", { x: L + 12, y: y - 26, size: 10, font: fontBold, color: black })
+  const clientSub = [cl?.company, cl?.email].filter(Boolean).join("  ·  ")
+  if (clientSub) page.drawText(clientSub, { x: L + 12, y: y - 38, size: 8, font, color: gray })
 
-    // ── Meta box ─────────────────────────────────────────────────────────────
-    const metaY = 110
-    doc.rect(40, metaY, W, 64).fill(lightgray)
+  page.drawText("AMOUNT DUE", { x: L + 290, y: y - 14, size: 7, font, color: gray })
+  page.drawText(fzar(due), { x: L + 290, y: y - 30, size: 16, font: fontBold, color: blue })
+  page.drawText(`Status: ${inv.status ?? "issued"}`, { x: L + 290, y: y - 44, size: 8, font, color: gray })
+  y -= 74
 
-    doc.fillColor(gray).font("Helvetica").fontSize(8).text("BILL TO", 52, metaY + 10)
-    doc.fillColor(black).font("Helvetica-Bold").fontSize(10).text(cl?.name ?? "", 52, metaY + 22)
-    const clientLines = [cl?.company, cl?.email].filter(Boolean).join("  ·  ")
-    if (clientLines) doc.fillColor(gray).font("Helvetica").fontSize(9).text(clientLines, 52, metaY + 35)
+  // ── Line items ────────────────────────────────────────────────────────────
+  page.drawRectangle({ x: L, y: y - 18, width: W, height: 18, color: lgray })
+  page.drawText("ITEM",       { x: L + 8,   y: y - 12, size: 7, font, color: gray })
+  page.drawText("QTY",        { x: L + 310, y: y - 12, size: 7, font, color: gray })
+  page.drawText("UNIT PRICE", { x: L + 360, y: y - 12, size: 7, font, color: gray })
+  page.drawText("TOTAL",      { x: L + 450, y: y - 12, size: 7, font, color: gray })
+  y -= 18
 
-    doc.fillColor(gray).font("Helvetica").fontSize(8).text("AMOUNT DUE", 320, metaY + 10)
-    doc.fillColor(blue).font("Helvetica-Bold").fontSize(16).text(fzar(due), 320, metaY + 22)
-    doc.fillColor(gray).font("Helvetica").fontSize(9).text(`Status: ${inv.status ?? "issued"}`, 320, metaY + 42)
-
-    // ── Line items table ──────────────────────────────────────────────────────
-    const tableY = metaY + 78
-    const col = { item: 40, qty: 350, up: 400, total: 475 }
-
-    doc.rect(40, tableY, W, 20).fill(lightgray)
-    doc.fillColor(gray).font("Helvetica").fontSize(8)
-    doc.text("ITEM", col.item + 8, tableY + 6)
-    doc.text("QTY", col.qty, tableY + 6, { width: 45, align: "right" })
-    doc.text("UNIT PRICE", col.up, tableY + 6, { width: 65, align: "right" })
-    doc.text("TOTAL", col.total, tableY + 6, { width: 40, align: "right" })
-
-    let rowY = tableY + 20
-    items.forEach((item) => {
-      const title = item.title || item.description || "Item"
-      const desc = item.title && item.description ? item.description : null
-      const rowH = desc ? 32 : 20
-
-      doc.rect(40, rowY, W, rowH).stroke("#E5E7EB")
-      doc.fillColor(black).font("Helvetica-Bold").fontSize(9).text(title, col.item + 8, rowY + 5, { width: 290 })
-      if (desc) {
-        doc.fillColor(gray).font("Helvetica").fontSize(8).text(desc, col.item + 8, rowY + 17, { width: 290 })
-      }
-      doc.fillColor(black).font("Helvetica").fontSize(9)
-      doc.text(String(item.quantity), col.qty, rowY + 5, { width: 45, align: "right" })
-      doc.text(fzar(item.unit_price), col.up, rowY + 5, { width: 65, align: "right" })
-      doc.text(fzar(item.quantity * item.unit_price), col.total, rowY + 5, { width: 40, align: "right" })
-      rowY += rowH
-    })
-
-    if (items.length === 0) {
-      doc.fillColor(gray).font("Helvetica").fontSize(9).text("No line items", col.item + 8, rowY + 5)
-      rowY += 20
-    }
-
-    // ── Totals ────────────────────────────────────────────────────────────────
-    rowY += 8
-    const totX = 350
-
-    const addTotRow = (label: string, value: string, bold = false) => {
-      doc.fillColor(bold ? black : gray)
-        .font(bold ? "Helvetica-Bold" : "Helvetica")
-        .fontSize(bold ? 11 : 9)
-      doc.text(label, totX, rowY, { width: 120 })
-      doc.text(value, totX, rowY, { width: 120 + 35, align: "right" })
-      if (bold) {
-        doc.moveTo(totX, rowY - 4).lineTo(totX + 155, rowY - 4).strokeColor("#111827").lineWidth(1).stroke()
-      }
-      rowY += bold ? 16 : 13
-    }
-
-    addTotRow("Subtotal", fzar(inv.subtotal))
-    if (inv.travel_cost > 0) addTotRow("Travel", fzar(inv.travel_cost))
-    if (inv.discount_amount > 0) addTotRow("Discount", `-${fzar(inv.discount_amount)}`)
-    if (vatOn && inv.vat_rate > 0) addTotRow(`VAT (${inv.vat_rate}%)`, fzar(inv.vat_amount))
-    addTotRow(vatOn && inv.vat_rate > 0 ? "Total (incl. VAT)" : "Total", fzar(inv.total), true)
-
-    if (paid > 0) {
-      addTotRow("Paid", fzar(paid))
-      rowY += 2
-      doc.fillColor(blue).font("Helvetica-Bold").fontSize(11)
-      doc.text("Amount due", totX, rowY, { width: 120 })
-      doc.text(fzar(due), totX, rowY, { width: 155, align: "right" })
-      rowY += 16
-    }
-
-    // ── Payment schedule ─────────────────────────────────────────────────────
-    if (termSchedule.length > 0) {
-      rowY += 12
-      doc.fillColor(gray).font("Helvetica").fontSize(8).text("PAYMENT SCHEDULE", 40, rowY)
-      rowY += 12
-
-      // Header row
-      doc.rect(40, rowY, W, 16).fill(lightgray)
-      doc.fillColor(gray).font("Helvetica").fontSize(7)
-        .text("MILESTONE", 52, rowY + 4)
-        .text("%", 310, rowY + 4, { width: 30, align: "right" })
-        .text("AMOUNT", 350, rowY + 4, { width: 80, align: "right" })
-        .text("STATUS", 440, rowY + 4, { width: 95, align: "right" })
-      rowY += 16
-
-      termSchedule.forEach(t => {
-        const isCurrent = termSchedule.find(x => x.label === t.label) && inv.term_type
-        doc.rect(40, rowY, W, 18).stroke("#E5E7EB")
-        doc.fillColor(black).font(isCurrent ? "Helvetica-Bold" : "Helvetica").fontSize(9)
-          .text(t.label, 52, rowY + 4, { width: 250 })
-        doc.fillColor(gray).font("Helvetica").fontSize(9)
-          .text(`${t.pct}%`, 310, rowY + 4, { width: 30, align: "right" })
-          .text(fzar(t.amount), 350, rowY + 4, { width: 80, align: "right" })
-        const statusColor = t.status === "Paid" ? "#16A34A" : t.status === "Not invoiced" ? gray : "#D97706"
-        doc.fillColor(statusColor).font("Helvetica-Bold").fontSize(8)
-          .text(t.status, 440, rowY + 5, { width: 95, align: "right" })
-        rowY += 18
-      })
-    }
-
-    // ── Banking details ───────────────────────────────────────────────────────
-    if (ws?.bank_name) {
-      rowY += 16
-      doc.rect(40, rowY, W, 14).fill("#F0FDF4")
-      doc.fillColor("#166534").font("Helvetica-Bold").fontSize(8).text("PAYMENT — EFT", 52, rowY + 3)
-      rowY += 18
-
-      const bankLines = [
-        ws.bank_name ? `Bank: ${ws.bank_name}` : null,
-        ws.bank_account_holder ? `Account holder: ${ws.bank_account_holder}` : null,
-        ws.bank_account_number ? `Account number: ${ws.bank_account_number}` : null,
-        ws.bank_branch_code ? `Branch code: ${ws.bank_branch_code}` : null,
-        `Reference: ${inv.doc_number ?? ""}`,
-      ].filter(Boolean)
-
-      doc.fillColor(black).font("Helvetica").fontSize(9)
-        .text(bankLines.join("   ·   "), 40, rowY, { width: W })
-      rowY += 16
-    }
-
-    // ── Footer ────────────────────────────────────────────────────────────────
-    const footerY = 760
-    doc.moveTo(40, footerY).lineTo(555, footerY).strokeColor("#E5E7EB").lineWidth(0.5).stroke()
-    const footParts = [ws?.name, ws?.registration_number ? `Reg: ${ws.registration_number}` : null, vatOn && ws?.vat_number ? `VAT: ${ws.vat_number}` : null].filter(Boolean).join("  ·  ")
-    doc.fillColor(gray).font("Helvetica").fontSize(8).text(footParts, 40, footerY + 6, { align: "center", width: W })
-
-    doc.end()
+  items.forEach((item) => {
+    const title = item.title || item.description || "Item"
+    const desc  = item.title && item.description ? item.description : null
+    const rowH  = desc ? 30 : 20
+    page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.5, color: lgray })
+    page.drawText(title.substring(0, 55), { x: L + 8, y: y - 12, size: 9, font: fontBold, color: black })
+    if (desc) page.drawText(desc.substring(0, 65), { x: L + 8, y: y - 23, size: 7, font, color: gray })
+    page.drawText(String(item.quantity), { x: L + 310, y: y - 12, size: 9, font, color: black })
+    page.drawText(fzar(item.unit_price), { x: L + 355, y: y - 12, size: 9, font, color: black })
+    page.drawText(fzar(item.quantity * item.unit_price), { x: L + 445, y: y - 12, size: 9, font: fontBold, color: black })
+    y -= rowH
   })
 
-  const pdfBuffer = Buffer.concat(chunks)
-  return new Response(pdfBuffer, {
+  if (items.length === 0) {
+    page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.5, color: lgray })
+    page.drawText("No line items", { x: L + 8, y: y - 12, size: 9, font, color: gray })
+    y -= 20
+  }
+
+  // ── Totals ────────────────────────────────────────────────────────────────
+  y -= 10
+  const totX = L + 330
+
+  const drawTot = (label: string, value: string, bold = false, colOverride?: any) => {
+    const f   = bold ? fontBold : font
+    const sz  = bold ? 11 : 9
+    const col = colOverride ?? (bold ? black : gray)
+    if (bold) {
+      page.drawLine({ start: { x: totX, y: y + 4 }, end: { x: R, y: y + 4 }, thickness: 0.8, color: black })
+      y -= 4
+    }
+    page.drawText(label, { x: totX, y, size: sz, font: f, color: col })
+    page.drawText(value, { x: R - f.widthOfTextAtSize(value, sz), y, size: sz, font: f, color: col })
+    y -= bold ? 16 : 13
+  }
+
+  drawTot("Subtotal", fzar(inv.subtotal))
+  if (inv.travel_cost > 0) drawTot("Travel", fzar(inv.travel_cost))
+  if (inv.discount_amount > 0) drawTot("Discount", `-${fzar(inv.discount_amount)}`)
+  if (vatOn && inv.vat_rate > 0) drawTot(`VAT (${inv.vat_rate}%)`, fzar(inv.vat_amount))
+  drawTot(vatOn && inv.vat_rate > 0 ? "Total (incl. VAT)" : "Total", fzar(inv.total), true)
+  if (paid > 0) {
+    drawTot("Paid", fzar(paid))
+    page.drawLine({ start: { x: totX, y: y + 4 }, end: { x: R, y: y + 4 }, thickness: 0.8, color: blue })
+    y -= 4
+    page.drawText("Amount due", { x: totX, y, size: 11, font: fontBold, color: blue })
+    page.drawText(fzar(due), { x: R - fontBold.widthOfTextAtSize(fzar(due), 11), y, size: 11, font: fontBold, color: blue })
+    y -= 16
+  }
+
+  // ── Payment schedule ──────────────────────────────────────────────────────
+  if (termSchedule.length > 0) {
+    y -= 16
+    page.drawText("PAYMENT SCHEDULE", { x: L, y, size: 7, font, color: gray })
+    y -= 10
+
+    page.drawRectangle({ x: L, y: y - 16, width: W, height: 16, color: lgray })
+    page.drawText("MILESTONE", { x: L + 8, y: y - 11, size: 7, font, color: gray })
+    page.drawText("%",         { x: L + 290, y: y - 11, size: 7, font, color: gray })
+    page.drawText("AMOUNT",    { x: L + 340, y: y - 11, size: 7, font, color: gray })
+    page.drawText("STATUS",    { x: L + 430, y: y - 11, size: 7, font, color: gray })
+    y -= 16
+
+    termSchedule.forEach(t => {
+      page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.5, color: lgray })
+      const f = t.isCurrent ? fontBold : font
+      page.drawText(t.label, { x: L + 8, y: y - 12, size: 9, font: f, color: black })
+      page.drawText(`${t.pct}%`, { x: L + 290, y: y - 12, size: 9, font, color: gray })
+      page.drawText(fzar(t.amount), { x: L + 340, y: y - 12, size: 9, font, color: black })
+      const sCol = t.status === "Paid" ? green : t.status === "Not invoiced" ? gray : amber
+      page.drawText(t.status, { x: L + 430, y: y - 12, size: 8, font: fontBold, color: sCol })
+      y -= 18
+    })
+  }
+
+  // ── Banking details ───────────────────────────────────────────────────────
+  if (ws?.bank_name) {
+    y -= 16
+    page.drawRectangle({ x: L, y: y - 18, width: W, height: 18, color: rgb(0.94, 0.99, 0.96) })
+    page.drawText("PAYMENT — EFT", { x: L + 8, y: y - 12, size: 7, font: fontBold, color: green })
+    y -= 20
+
+    const bankParts = [
+      ws.bank_name ? `Bank: ${ws.bank_name}` : null,
+      ws.bank_account_holder ? `Holder: ${ws.bank_account_holder}` : null,
+      ws.bank_account_number ? `Acc: ${ws.bank_account_number}` : null,
+      ws.bank_branch_code ? `Branch: ${ws.bank_branch_code}` : null,
+      `Reference: ${inv.doc_number ?? ""}`,
+    ].filter(Boolean).join("   ·   ")
+
+    page.drawText(bankParts, { x: L, y, size: 8, font, color: black, maxWidth: W })
+    y -= 14
+  }
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  const footY = 30
+  page.drawLine({ start: { x: L, y: footY + 14 }, end: { x: R, y: footY + 14 }, thickness: 0.5, color: lgray })
+  const footParts = [ws?.name, ws?.registration_number ? `Reg: ${ws.registration_number}` : null, vatOn && ws?.vat_number ? `VAT: ${ws.vat_number}` : null].filter(Boolean).join("  ·  ")
+  page.drawText(footParts, { x: (width - font.widthOfTextAtSize(footParts, 8)) / 2, y: footY, size: 8, font, color: gray })
+
+  const pdfBytes = await pdfDoc.save()
+  return new Response(pdfBytes, {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="Invoice-${inv.doc_number ?? "invoice"}.pdf"`,
