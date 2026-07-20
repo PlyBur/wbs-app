@@ -13,6 +13,11 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [lolaEnabled, setLolaEnabled] = useState(true)
+
+  useEffect(() => {
+    setLolaEnabled(localStorage.getItem("lola_enabled") !== "false")
+  }, [])
 
   useEffect(() => {
     fetch("/api/settings").then(r => r.json()).then(setWs)
@@ -214,6 +219,35 @@ export default function SettingsPage() {
           {saved && <p className="text-sm text-success">Saved!</p>}
         </div>
       </form>
+
+      {/* Lola — outside the form so it doesn't submit on toggle */}
+      <div className="max-w-2xl pb-8">
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Lola — AI voice assistant</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Enable Lola</p>
+                <p className="text-xs text-muted-foreground">Shows the mic button on every page. Requires Chrome or Edge.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !lolaEnabled
+                  setLolaEnabled(next)
+                  localStorage.setItem("lola_enabled", next ? "true" : "false")
+                }}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${lolaEnabled ? "bg-primary" : "bg-muted"}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${lolaEnabled ? "translate-x-6" : "translate-x-1"}`} />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground border-t border-border pt-3">
+              Lola uses Claude AI (Anthropic) to understand your voice commands. Requires <code className="bg-muted px-1 rounded">ANTHROPIC_API_KEY</code> in your Vercel environment variables.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </DashboardLayout>
   )
 }
