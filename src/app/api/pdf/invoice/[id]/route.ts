@@ -256,7 +256,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.4, color: C.mgray })
 
       const f = t.isCurrent ? fontB : font
-      page.drawText(t.label + (t.isCurrent ? " ◀" : ""), { x: L + 8, y: y - 13, size: 9, font: f, color: C.black })
+      page.drawText(t.label + (t.isCurrent ? " <" : ""), { x: L + 8, y: y - 13, size: 9, font: f, color: C.black })
       page.drawText(`${t.pct}%`, { x: L + 290, y: y - 13, size: 9, font, color: C.gray })
       page.drawText(fzar(t.amount), { x: L + 335, y: y - 13, size: 9, font, color: C.black })
 
