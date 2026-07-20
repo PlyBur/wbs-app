@@ -211,7 +211,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   page.drawText(footParts, { x: (width - font.widthOfTextAtSize(footParts, 8)) / 2, y: footY, size: 8, font, color: gray })
 
   const pdfBytes = await pdfDoc.save()
-  return new Response(pdfBytes, {
+  return new Response(Buffer.from(pdfBytes), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="Invoice-${inv.doc_number ?? "invoice"}.pdf"`,

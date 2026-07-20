@@ -165,7 +165,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   page.drawText(footParts, { x: (width - footW) / 2, y: footY, size: 8, font, color: gray })
 
   const pdfBytes = await pdfDoc.save()
-  return new Response(pdfBytes, {
+  return new Response(Buffer.from(pdfBytes), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="Quote-${q.doc_number ?? "quote"}.pdf"`,
