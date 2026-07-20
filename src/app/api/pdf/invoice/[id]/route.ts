@@ -106,7 +106,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     const dims = logoImg.scaleToFit(110, 44)
     page.drawImage(logoImg, { x: L, y, width: dims.width, height: dims.height })
   } else {
-    page.drawRectangle({ x: L, y, width: 44, height: 44, color: C.blue, borderRadius: 6 })
+    page.drawRectangle({ x: L, y, width: 44, height: 44, color: C.blue })
     const wW = fontB.widthOfTextAtSize("W", 22)
     page.drawText("W", { x: L + (44 - wW) / 2, y: y + 11, size: 22, font: fontB, color: C.white })
   }
@@ -136,7 +136,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
   // ── Meta box ──────────────────────────────────────────────────────────────
   const metaH = 72
-  page.drawRectangle({ x: L, y: y - metaH, width: W, height: metaH, color: C.lgray, borderRadius: 6 })
+  page.drawRectangle({ x: L, y: y - metaH, width: W, height: metaH, color: C.lgray })
 
   page.drawText("BILL TO", { x: L + 14, y: y - 14, size: 7, font, color: C.gray })
   page.drawText(cl?.name ?? "", { x: L + 14, y: y - 28, size: 11, font: fontB, color: C.black })
@@ -159,7 +159,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   const col = { desc: L, qty: L + 330, up: L + 375, tot: L + 455, rEdge: R }
 
   const thH = 22
-  page.drawRectangle({ x: L, y: y - thH, width: W, height: thH, color: C.blue, borderRadius: 4 })
+  page.drawRectangle({ x: L, y: y - thH, width: W, height: thH, color: C.blue })
   page.drawText("ITEM",       { x: col.desc + 8, y: y - 15, size: 8, font: fontB, color: C.white })
   page.drawText("QTY",        { x: col.qty,       y: y - 15, size: 8, font: fontB, color: C.white })
   page.drawText("UNIT PRICE", { x: col.up,        y: y - 15, size: 8, font: fontB, color: C.white })
@@ -265,7 +265,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   if (ws?.bank_name) {
     y -= 6
     const bankH = 38
-    page.drawRectangle({ x: L, y: y - bankH, width: W, height: bankH, color: C.greenBg, borderRadius: 6 })
+    page.drawRectangle({ x: L, y: y - bankH, width: W, height: bankH, color: C.greenBg })
     page.drawText("PAYMENT — EFT", { x: L + 12, y: y - 14, size: 8, font: fontB, color: C.green })
 
     const bankLine = [

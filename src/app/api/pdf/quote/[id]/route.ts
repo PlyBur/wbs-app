@@ -79,7 +79,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     const dims = logoImg.scaleToFit(110, 44)
     page.drawImage(logoImg, { x: L, y, width: dims.width, height: dims.height })
   } else {
-    page.drawRectangle({ x: L, y, width: 44, height: 44, color: C.blue, borderRadius: 6 })
+    page.drawRectangle({ x: L, y, width: 44, height: 44, color: C.blue })
     const wW = fontB.widthOfTextAtSize("W", 22)
     page.drawText("W", { x: L + (44 - wW) / 2, y: y + 11, size: 22, font: fontB, color: C.white })
   }
@@ -116,7 +116,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
   // ── Meta: bill-to / quote-total ───────────────────────────────────────────
   const metaH = 72
-  page.drawRectangle({ x: L, y: y - metaH, width: W, height: metaH, color: C.lgray, borderRadius: 6 })
+  page.drawRectangle({ x: L, y: y - metaH, width: W, height: metaH, color: C.lgray })
 
   // Left: Prepared for
   page.drawText("PREPARED FOR", { x: L + 14, y: y - 14, size: 7, font, color: C.gray })
@@ -152,7 +152,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
   // Table header
   const thH = 22
-  page.drawRectangle({ x: L, y: y - thH, width: W, height: thH, color: C.blue, borderRadius: 4 })
+  page.drawRectangle({ x: L, y: y - thH, width: W, height: thH, color: C.blue })
   page.drawText("ITEM",       { x: col.desc + 8, y: y - 15, size: 8, font: fontB, color: C.white })
   page.drawText("QTY",        { x: col.qty,       y: y - 15, size: 8, font: fontB, color: C.white })
   page.drawText("UNIT PRICE", { x: col.up,        y: y - 15, size: 8, font: fontB, color: C.white })
@@ -238,7 +238,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     termDefs.forEach((t, i) => {
       const bg = i % 2 === 0 ? C.greenBg : rgb(0.96, 0.998, 0.975)
       page.drawRectangle({ x: L, y: y - 20, width: W, height: 20, color: bg })
-      if (i === 0) page.drawRectangle({ x: L, y: y - 20, width: W, height: 20, color: bg, borderRadius: 4 })
+      if (i === 0) page.drawRectangle({ x: L, y: y - 20, width: W, height: 20, color: bg })
       page.drawText(`${t.label}`, { x: L + 10, y: y - 13, size: 9.5, font: fontB, color: C.green })
       page.drawText(`${t.pct}%`,  { x: L + 10, y: y - 13, size: 9.5, font, color: C.gray })
       const amt = fzar(q.total * t.pct / 100)
