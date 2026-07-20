@@ -319,7 +319,7 @@ export default function ProjectDetailPage() {
                 <Receipt className="w-4 h-4" />
                 {hasTerms ? "Payment milestones" : "Invoices"}
               </CardTitle>
-              {!hasTerms && (
+              {!hasTerms && invoices.length === 0 && (
                 <Button size="sm" onClick={() => generateInvoice()} disabled={!!generatingInvoice}>
                   <Plus className="w-3.5 h-3.5" />{generatingInvoice ? "Generating…" : "Generate invoice"}
                 </Button>
