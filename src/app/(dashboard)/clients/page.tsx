@@ -25,7 +25,7 @@ export default async function ClientsPage() {
       {!clients || clients.length === 0 ? (
         <EmptyState icon={Users} title="No clients yet" description="Add your first client to get started." />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {clients.map(c => (
             <Link key={c.id} href={`/clients/${c.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">

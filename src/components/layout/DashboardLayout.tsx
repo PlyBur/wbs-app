@@ -13,12 +13,40 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, title, actions, user }: DashboardLayoutProps) {
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <Header title={title} user={user} actions={actions} />
-        <main className="flex-1 overflow-y-auto p-5 scrollbar-thin">
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — fixed overlay on mobile, static on desktop */}
+      <div
+        className={[
+          "fixed inset-y-0 left-0 z-50 flex md:relative md:z-auto md:translate-x-0 transition-transform duration-200",
+          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+        ].join(" ")}
+      >
+        <Sidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed(c => !c)}
+          onClose={() => setMobileOpen(false)}
+        />
+      </div>
+
+      <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+        <Header
+          title={title}
+          user={user}
+          actions={actions}
+          onMenuClick={() => setMobileOpen(o => !o)}
+        />
+        <main className="flex-1 overflow-y-auto p-4 md:p-5 scrollbar-thin">
           {children}
         </main>
       </div>

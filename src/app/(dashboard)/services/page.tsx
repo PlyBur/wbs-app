@@ -25,7 +25,7 @@ export default async function ServicesPage() {
       {!services || services.length === 0 ? (
         <EmptyState icon={Wrench} title="No services yet" description="Add your billable services to use in quotes." />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {services.map(s => (
             <Link key={s.id} href={`/services/${s.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">

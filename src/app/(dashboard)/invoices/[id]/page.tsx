@@ -22,6 +22,7 @@ export default function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState<any>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [workspace, setWorkspace] = useState<any>(null)
+  const [termSchedule, setTermSchedule] = useState<any[]>([])
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [paymentForm, setPaymentForm] = useState({ amount: "", method: "eft", reference: "", notes: "" })
   const [savingPayment, setSavingPayment] = useState(false)
@@ -35,6 +36,51 @@ export default function InvoiceDetailPage() {
       fetch("/api/settings").then(r => r.json()),
     ])
     setInvoice(inv); setPayments(pmts ?? []); setWorkspace(ws)
+
+    // Load payment schedule if this is a term invoice
+    if (inv?.term_type && inv?.project_id) {
+      const { data: project } = await supabase
+        .from("projects")
+        .select("*, quotes(*)")
+        .eq("id", inv.project_id)
+        .single()
+      const quote = project?.quotes as any
+
+      if (quote?.terms_enabled) {
+        const { data: allTermInvs } = await supabase
+          .from("invoices")
+          .select("id, term_type, term_label, total, status, doc_number")
+          .eq("project_id", inv.project_id)
+          .not("term_type", "is", null)
+
+        const ids = (allTermInvs ?? []).map((i: any) => i.id)
+        const { data: allPmts } = ids.length > 0
+          ? await supabase.from("payments").select("invoice_id, amount").in("invoice_id", ids)
+          : { data: [] }
+
+        const paidMap: Record<string, number> = {}
+        ;(allPmts ?? []).forEach((p: any) => { paidMap[p.invoice_id] = (paidMap[p.invoice_id] ?? 0) + p.amount })
+
+        const defs = [
+          { key: "deposit",  label: quote.terms_deposit_label  ?? "Deposit",                    pct: quote.terms_deposit_pct },
+          { key: "progress", label: quote.terms_progress_label ?? "Progress payment",            pct: quote.terms_progress_pct },
+          { key: "final",    label: quote.terms_final_label    ?? "Final payment on completion", pct: quote.terms_final_pct },
+        ].filter((t: any) => t.pct)
+
+        setTermSchedule(defs.map((term: any) => {
+          const ti = (allTermInvs ?? []).find((i: any) => i.term_type === term.key) as any
+          const amount = Math.round(quote.total * term.pct / 100 * 100) / 100
+          let status = "not_invoiced"
+          let docNumber = null
+          if (ti) {
+            const paidAmt = paidMap[ti.id] ?? 0
+            status = paidAmt >= ti.total ? "paid" : "issued"
+            docNumber = ti.doc_number
+          }
+          return { ...term, amount, status, docNumber, isCurrent: term.key === inv.term_type }
+        }))
+      }
+    }
   }
 
   useEffect(() => { load() }, [id])
@@ -75,6 +121,12 @@ export default function InvoiceDetailPage() {
   const displayStatus = isOverdue ? "overdue" : invoice.status
   const vatOn = workspace?.vat_registered !== false
 
+  const termStatusBadge = (status: string, docNumber: string | null) => {
+    if (status === "paid") return <Badge variant="success">Paid</Badge>
+    if (status === "issued") return <span className="text-xs text-warning-foreground font-medium">{docNumber ? `Issued · ${docNumber}` : "Issued"}</span>
+    return <span className="text-xs text-muted-foreground">Not invoiced</span>
+  }
+
   return (
     <DashboardLayout
       title={invoice.doc_number ?? "Invoice"}
@@ -104,7 +156,7 @@ export default function InvoiceDetailPage() {
         <Card>
           <CardHeader><CardTitle className="text-sm">Details</CardTitle></CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 text-sm">
               <div><p className="text-muted-foreground text-xs">Invoice number</p><p className="font-medium">{invoice.doc_number ?? "—"}</p></div>
               <div><p className="text-muted-foreground text-xs">Issued</p><p className="font-medium">{shortDate(invoice.created_at)}</p></div>
               <div><p className="text-muted-foreground text-xs">Due date</p><p className={`font-medium ${isOverdue ? "text-destructive" : ""}`}>{shortDate(invoice.due_date)}</p></div>
@@ -154,6 +206,31 @@ export default function InvoiceDetailPage() {
           </CardContent>
         </Card>
 
+        {termSchedule.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Payment schedule</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              <ul className="divide-y divide-border">
+                {termSchedule.map((term, i) => (
+                  <li key={i} className={`flex items-center justify-between px-5 py-3.5 text-sm ${term.isCurrent ? "bg-primary/5" : ""}`}>
+                    <div>
+                      <p className={`font-medium ${term.isCurrent ? "text-primary" : ""}`}>
+                        {term.label}
+                        {term.isCurrent && <span className="ml-2 text-xs font-normal text-primary">(this invoice)</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{term.pct}% of total</p>
+                    </div>
+                    <div className="text-right space-y-1">
+                      <p className="font-semibold">{formatZAR(term.amount)}</p>
+                      {termStatusBadge(term.status, term.docNumber)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
         {payments.length > 0 && (
           <Card>
             <CardHeader><CardTitle className="text-sm">Payments received</CardTitle></CardHeader>
@@ -187,7 +264,7 @@ export default function InvoiceDetailPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={recordPayment} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground">Amount (ZAR)</label>
                     <Input type="number" step="0.01" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} required />

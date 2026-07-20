@@ -25,7 +25,7 @@ export default async function ProductsPage() {
       {!products || products.length === 0 ? (
         <EmptyState icon={Package} title="No products yet" description="Add products to use in quotes and invoices." />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {products.map(p => (
             <Link key={p.id} href={`/products/${p.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">

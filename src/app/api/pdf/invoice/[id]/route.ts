@@ -19,6 +19,94 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   const paid = (pmts ?? []).reduce((s: number, p: any) => s + p.amount, 0)
   const vatOn = ws?.vat_registered !== false
 
+  // Payment schedule: load if this is a term invoice with a project
+  let scheduleHtml = ""
+  if (inv.term_type && inv.project_id) {
+    // Get quote via project
+    const { data: project } = await supabase
+      .from("projects")
+      .select("*, quotes(*)")
+      .eq("id", inv.project_id)
+      .single()
+    const quote = project?.quotes as any
+
+    if (quote?.terms_enabled) {
+      // Get all term invoices for this project
+      const { data: allTermInvoices } = await supabase
+        .from("invoices")
+        .select("id, term_type, term_label, total, status")
+        .eq("project_id", inv.project_id)
+        .not("term_type", "is", null)
+
+      // Get payments for all term invoices
+      const termInvIds = (allTermInvoices ?? []).map((i: any) => i.id)
+      const { data: allPayments } = termInvIds.length > 0
+        ? await supabase.from("payments").select("invoice_id, amount").in("invoice_id", termInvIds)
+        : { data: [] }
+
+      const paymentsByInv: Record<string, number> = {}
+      ;(allPayments ?? []).forEach((p: any) => {
+        paymentsByInv[p.invoice_id] = (paymentsByInv[p.invoice_id] ?? 0) + p.amount
+      })
+
+      const termDefs = [
+        { key: "deposit",  label: quote.terms_deposit_label  ?? "Deposit",                    pct: quote.terms_deposit_pct },
+        { key: "progress", label: quote.terms_progress_label ?? "Progress payment",            pct: quote.terms_progress_pct },
+        { key: "final",    label: quote.terms_final_label    ?? "Final payment on completion", pct: quote.terms_final_pct },
+      ].filter((t: any) => t.pct)
+
+      const rows = termDefs.map((term: any) => {
+        const termInv = (allTermInvoices ?? []).find((i: any) => i.term_type === term.key) as any
+        const amount = Math.round(quote.total * term.pct / 100 * 100) / 100
+        let statusLabel = "Not invoiced"
+        let statusColor = "#6b7280"
+        let statusBg = "#f3f4f6"
+
+        if (termInv) {
+          const paidAmt = paymentsByInv[termInv.id] ?? 0
+          const fullyPaid = paidAmt >= termInv.total
+          if (fullyPaid) {
+            statusLabel = "Paid"
+            statusColor = "#16a34a"
+            statusBg = "#dcfce7"
+          } else {
+            statusLabel = termInv.doc_number ? `Issued (${termInv.doc_number})` : "Issued"
+            statusColor = "#d97706"
+            statusBg = "#fef3c7"
+          }
+        }
+
+        const isCurrent = term.key === inv.term_type
+        return `<tr style="${isCurrent ? "background:#eff6ff;" : ""}">
+          <td style="padding:8px 12px;font-size:12px;${isCurrent ? "font-weight:600;" : ""}">${term.label}${isCurrent ? " <span style='font-size:10px;color:#2563eb;'>(this invoice)</span>" : ""}</td>
+          <td style="padding:8px 12px;text-align:right;font-size:12px;">${term.pct}%</td>
+          <td style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600;">${fzar(amount)}</td>
+          <td style="padding:8px 12px;text-align:right;">
+            <span style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:600;color:${statusColor};background:${statusBg};">${statusLabel}</span>
+          </td>
+        </tr>`
+      }).join("")
+
+      scheduleHtml = `
+<div style="margin-top:28px;">
+  <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:10px;">Payment schedule</h3>
+  <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+    <thead>
+      <tr style="background:#f9fafb;">
+        <th style="padding:7px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;">Milestone</th>
+        <th style="padding:7px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;">%</th>
+        <th style="padding:7px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;">Amount</th>
+        <th style="padding:7px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;">Status</th>
+      </tr>
+    </thead>
+    <tbody style="divide-y:1px solid #e5e7eb;">
+      ${rows}
+    </tbody>
+  </table>
+</div>`
+    }
+  }
+
   const logoHtml = ws?.logo_url
     ? `<img src="${ws.logo_url}" style="height:56px;max-width:180px;object-fit:contain" alt="Logo">`
     : `<div class="logo">W</div>`
@@ -66,9 +154,10 @@ ${items.map((i: any)=>`<tr><td><strong>${v(i.title||i.description)}</strong>${i.
   <div class="tr"><span class="tl">Subtotal</span><span>${fzar(inv.subtotal)}</span></div>
   ${inv.travel_cost>0?`<div class="tr"><span class="tl">Travel</span><span>${fzar(inv.travel_cost)}</span></div>`:""}
   ${inv.discount_amount>0?`<div class="tr"><span class="tl">Discount</span><span>-${fzar(inv.discount_amount)}</span></div>`:""}
-  ${vatOn?`<div class="tr"><span class="tl">VAT (${inv.vat_rate}%)</span><span>${fzar(inv.vat_amount)}</span></div>`:""}
-  <div class="tr tot"><span class="tl">${vatOn?"Total (incl. VAT)":"Total"}</span><span>${fzar(inv.total)}</span></div>
+  ${vatOn&&inv.vat_rate>0?`<div class="tr"><span class="tl">VAT (${inv.vat_rate}%)</span><span>${fzar(inv.vat_amount)}</span></div>`:""}
+  <div class="tr tot"><span class="tl">${vatOn&&inv.vat_rate>0?"Total (incl. VAT)":"Total"}</span><span>${fzar(inv.total)}</span></div>
 </div>
+${scheduleHtml}
 ${bankDetails?`<div class="bank"><h3>Payment — EFT</h3><p>${bankDetails}</p><p style="margin-top:4px"><strong>Reference:</strong> ${v(inv.doc_number)}</p></div>`:""}
 <div class="foot">${v(ws?.name)}${ws?.registration_number?" · Reg: "+ws.registration_number:""}${vatOn&&ws?.vat_number?" · VAT: "+ws.vat_number:""}</div>
 </body></html>`

@@ -111,7 +111,7 @@ export default function NewQuotePage() {
         <Card>
           <CardHeader><CardTitle className="text-sm">Quote details</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Client *</label>
                 <select value={clientId} onChange={e => setClientId(e.target.value)} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none" required>
@@ -170,7 +170,7 @@ export default function NewQuotePage() {
         <Card>
           <CardHeader><CardTitle className="text-sm">Totals &amp; notes</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><label className="text-xs text-muted-foreground">Travel / call-out cost</label><Input type="number" value={travelCost} onChange={e => setTravelCost(parseFloat(e.target.value) || 0)} min="0" step="0.01" /></div>
               <div><label className="text-xs text-muted-foreground">Discount</label><Input type="number" value={discount} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} min="0" step="0.01" /></div>
             </div>

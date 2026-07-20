@@ -137,14 +137,7 @@ export default function ProjectDetailPage() {
     setAddingTask(true)
     const { data } = await supabase
       .from("project_tasks")
-      .insert({
-        project_id: id,
-        title: newTask,
-        status: "todo",
-        sort_order: tasks.length,
-        due_date: taskDueDate || null,
-        assigned_to: taskAssignedTo || null,
-      })
+      .insert({ project_id: id, title: newTask, status: "todo", sort_order: tasks.length, due_date: taskDueDate || null, assigned_to: taskAssignedTo || null })
       .select("*, team_members(name)")
       .single()
     if (data) setTasks(ts => [...ts, data])
@@ -155,8 +148,7 @@ export default function ProjectDetailPage() {
     await supabase.from("project_tasks").delete().eq("id", taskId)
     const updated = tasks.filter(t => t.id !== taskId)
     setTasks(updated)
-    const done = updated.filter(t => t.status === "done").length
-    const pct = updated.length ? Math.round((done / updated.length) * 100) : 0
+    const pct = updated.length ? Math.round((updated.filter(t => t.status === "done").length / updated.length) * 100) : 0
     await supabase.from("projects").update({ completion_pct: pct }).eq("id", id)
     setProject((p: any) => ({ ...p, completion_pct: pct }))
   }
@@ -171,9 +163,7 @@ export default function ProjectDetailPage() {
     })
     const inv = await res.json()
     if (inv.id) {
-      const { data: invs } = await supabase
-        .from("invoices").select("*, invoice_line_items(*)")
-        .eq("project_id", id).order("created_at", { ascending: false })
+      const { data: invs } = await supabase.from("invoices").select("*, invoice_line_items(*)").eq("project_id", id).order("created_at", { ascending: false })
       setInvoices(invs ?? [])
     } else {
       alert(inv.error ?? "Failed to generate invoice")
@@ -189,8 +179,7 @@ export default function ProjectDetailPage() {
   async function deleteProject() {
     if (!confirm(`Delete "${project.title}"? This cannot be undone.`)) return
     await fetch(`/api/projects/${id}`, { method: "DELETE" })
-    router.refresh()
-    router.push("/projects")
+    router.refresh(); router.push("/projects")
   }
 
   async function deleteInvoice(invId: string) {
@@ -229,22 +218,13 @@ export default function ProjectDetailPage() {
   async function addInteraction() {
     if (!interactionForm.summary.trim()) return
     const res = await fetch(`/api/projects/${id}/interactions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(interactionForm),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(interactionForm),
     })
     const data = await res.json()
     if (!res.ok) { alert(data.error ?? "Failed to save interaction"); return }
     setInteractions(i => [data, ...i])
     setShowInteractionForm(false)
-    setInteractionForm({
-      interaction_date: new Date().toISOString().split("T")[0],
-      type: "call",
-      contact_person: "",
-      summary: "",
-      next_action: "",
-      next_action_date: "",
-    })
+    setInteractionForm({ interaction_date: new Date().toISOString().split("T")[0], type: "call", contact_person: "", summary: "", next_action: "", next_action_date: "" })
   }
 
   async function deleteInteraction(iid: string) {
@@ -255,23 +235,13 @@ export default function ProjectDetailPage() {
   async function addExpense() {
     if (!expenseForm.description.trim()) return
     const res = await fetch(`/api/projects/${id}/expenses`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(expenseForm),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expenseForm),
     })
     const data = await res.json()
     if (!res.ok) { alert(data.error ?? "Failed to save expense"); return }
     setExpenses(e => [data, ...e])
     setShowExpenseForm(false)
-    setExpenseForm({
-      expense_date: new Date().toISOString().split("T")[0],
-      category: "materials",
-      description: "",
-      supplier: "",
-      quantity: 1,
-      unit_cost: 0,
-      notes: "",
-    })
+    setExpenseForm({ expense_date: new Date().toISOString().split("T")[0], category: "materials", description: "", supplier: "", quantity: 1, unit_cost: 0, notes: "" })
   }
 
   async function deleteExpense(eid: string) {
@@ -285,7 +255,6 @@ export default function ProjectDetailPage() {
 
   const client = project.clients as any
   const pct = project.completion_pct ?? 0
-
   const hasTerms = quote?.terms_enabled && quote?.terms_deposit_pct
   const termDefs = hasTerms ? [
     { key: "deposit",  label: quote.terms_deposit_label  ?? "Deposit",                    pct: quote.terms_deposit_pct },
@@ -299,53 +268,29 @@ export default function ProjectDetailPage() {
       actions={
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant={statusColour[project.status] ?? "muted"}>{project.status}</Badge>
-          <select
-            value={project.status}
-            onChange={e => updateStatus(e.target.value)}
-            className="border border-border rounded-lg px-2 py-1 text-xs bg-card focus:outline-none"
-          >
+          <select value={project.status} onChange={e => updateStatus(e.target.value)}
+            className="border border-border rounded-lg px-2 py-1 text-xs bg-card focus:outline-none">
             <option value="pending">Pending</option>
             <option value="active">Active</option>
             <option value="on_hold">On hold</option>
             <option value="completed">Completed</option>
           </select>
-          <Button size="sm" variant="destructive" onClick={deleteProject}>
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
+          <Button size="sm" variant="destructive" onClick={deleteProject}><Trash2 className="w-3.5 h-3.5" /></Button>
         </div>
       }
     >
       <div className="max-w-3xl space-y-5">
 
-        {/* Project overview */}
+        {/* Project details */}
         <Card>
           <CardHeader><CardTitle className="text-sm">Project details</CardTitle></CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-muted-foreground text-xs">Client</p>
-                <p className="font-medium">{client?.name ?? "—"}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">Status</p>
-                <Badge variant={statusColour[project.status] ?? "muted"}>{project.status}</Badge>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">Created</p>
-                <p className="font-medium">{shortDate(project.created_at)}</p>
-              </div>
-              {project.start_date && (
-                <div>
-                  <p className="text-muted-foreground text-xs">Start date</p>
-                  <p className="font-medium">{shortDate(project.start_date)}</p>
-                </div>
-              )}
-              {project.end_date && (
-                <div>
-                  <p className="text-muted-foreground text-xs">End date</p>
-                  <p className="font-medium">{shortDate(project.end_date)}</p>
-                </div>
-              )}
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 text-sm">
+              <div><p className="text-muted-foreground text-xs">Client</p><p className="font-medium">{client?.name ?? "—"}</p></div>
+              <div><p className="text-muted-foreground text-xs">Status</p><Badge variant={statusColour[project.status] ?? "muted"}>{project.status}</Badge></div>
+              <div><p className="text-muted-foreground text-xs">Created</p><p className="font-medium">{shortDate(project.created_at)}</p></div>
+              {project.start_date && <div><p className="text-muted-foreground text-xs">Start date</p><p className="font-medium">{shortDate(project.start_date)}</p></div>}
+              {project.end_date && <div><p className="text-muted-foreground text-xs">End date</p><p className="font-medium">{shortDate(project.end_date)}</p></div>}
               {quote && (
                 <div className="col-span-2">
                   <p className="text-muted-foreground text-xs">Linked quote</p>
@@ -356,9 +301,7 @@ export default function ProjectDetailPage() {
               )}
             </div>
             <div className="mt-4">
-              <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-                <span>Completion</span><span>{pct}%</span>
-              </div>
+              <div className="flex justify-between text-xs text-muted-foreground mb-1.5"><span>Completion</span><span>{pct}%</span></div>
               <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
               </div>
@@ -366,223 +309,207 @@ export default function ProjectDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Payment milestones */}
-        {hasTerms && (
-          <Card>
-            <CardHeader><CardTitle className="text-sm">Payment milestones</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              {termDefs.map((term: any, i: number) => {
-                const amount = quote.total * term.pct / 100
-                const termInv = invoices.find(inv => inv.term_type === term.key)
-                const termPaid = termInv ? paidFor(termInv.id) >= termInv.total * 0.99 : false
-                return (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-muted/40">
-                    <div className="flex items-center gap-2">
-                      {termPaid
-                        ? <CheckCircle2 className="w-4 h-4 text-success" />
-                        : <Circle className="w-4 h-4 text-muted-foreground" />}
-                      <div>
-                        <p className="text-sm font-medium">{term.label}</p>
-                        <p className="text-xs text-muted-foreground">{term.pct}% of total</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{formatZAR(amount)}</p>
-                      <p className={`text-xs ${termPaid ? "text-success" : "text-muted-foreground"}`}>
-                        {termPaid ? "Paid" : termInv ? "Invoiced" : "Not invoiced"}
-                      </p>
-                    </div>
-                  </div>
-                )
-              })}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Invoices */}
+        {/* Payment milestones + Invoices — unified */}
         <Card>
           <CardHeader>
-            <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Receipt className="w-4 h-4" />Invoices
+                <Receipt className="w-4 h-4" />
+                {hasTerms ? "Payment milestones" : "Invoices"}
               </CardTitle>
-              {hasTerms ? (
-                <div className="flex flex-wrap gap-2">
-                  {termDefs.map((term: any) => {
-                    const exists = invoices.some(i => i.term_type === term.key)
-                    if (exists) return null
-                    return (
-                      <Button
-                        key={term.key}
-                        size="sm"
-                        variant="outline"
-                        onClick={() => generateInvoice(term.key)}
-                        disabled={!!generatingInvoice}
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        {generatingInvoice === term.key ? "Generating…" : term.label}
-                      </Button>
-                    )
-                  })}
-                  {termDefs.every((t: any) => invoices.some(i => i.term_type === t.key)) && (
-                    <p className="text-xs text-success self-center">All term invoices generated</p>
-                  )}
-                </div>
-              ) : (
+              {!hasTerms && (
                 <Button size="sm" onClick={() => generateInvoice()} disabled={!!generatingInvoice}>
-                  <Plus className="w-3.5 h-3.5" />
-                  {generatingInvoice ? "Generating…" : "Generate invoice"}
+                  <Plus className="w-3.5 h-3.5" />{generatingInvoice ? "Generating…" : "Generate invoice"}
                 </Button>
               )}
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {invoices.length === 0 && (
-              <p className="text-sm text-muted-foreground px-5 py-4 text-center">No invoices yet</p>
-            )}
-            <ul className="divide-y divide-border">
-              {invoices.map(inv => {
-                const paid = paidFor(inv.id)
-                const due = Math.max(0, inv.total - paid)
-                const invPmts = paymentsFor(inv.id)
-                const matchedTerm = termDefs.find((t: any) => t.key === inv.term_type)
-                const isOverdue = inv.status === "issued" && inv.due_date && inv.due_date < today
-                const displayStatus = isOverdue ? "overdue" : inv.status
-                return (
-                  <li key={inv.id} className="px-5 py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <p className="font-semibold text-sm">{inv.doc_number}</p>
-                          {inv.term_type && (
-                            <Badge variant="muted" className="text-xs">
-                              {inv.term_label ?? (matchedTerm as any)?.label ?? inv.term_type}
-                            </Badge>
-                          )}
-                          <Badge variant={invStatusColour[displayStatus] ?? "muted"}>{displayStatus}</Badge>
+            {hasTerms ? (
+              <ul className="divide-y divide-border">
+                {termDefs.map((term: any, i: number) => {
+                  const amount = Math.round(quote.total * term.pct / 100 * 100) / 100
+                  const termInv = invoices.find((inv: any) => inv.term_type === term.key)
+                  const termPaidAmt = termInv ? paidFor(termInv.id) : 0
+                  const termDue = termInv ? Math.max(0, termInv.total - termPaidAmt) : 0
+                  const termFullyPaid = termInv ? termPaidAmt >= termInv.total * 0.99 : false
+                  const isOverdue = termInv && termInv.status === "issued" && termInv.due_date && termInv.due_date < today
+                  const displayStatus = isOverdue ? "overdue" : termInv?.status
+                  const invPmts = termInv ? paymentsFor(termInv.id) : []
+                  return (
+                    <li key={i} className="px-5 py-4">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 shrink-0">
+                          {termFullyPaid
+                            ? <CheckCircle2 className="w-4 h-4 text-success" />
+                            : <Circle className="w-4 h-4 text-muted-foreground" />}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          Issued {shortDate(inv.created_at)} · Due {shortDate(inv.due_date)}
-                        </p>
-                        {invPmts.length > 0 && (
-                          <div className="mt-2 space-y-0.5">
-                            {invPmts.map((p: any) => (
-                              <p key={p.id} className="text-xs text-success">
-                                {shortDate(p.paid_at)} — {formatZAR(p.amount)} received
-                                ({p.method?.toUpperCase()}{p.reference ? ` · ${p.reference}` : ""})
-                              </p>
-                            ))}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <p className="font-medium text-sm">{term.label}</p>
+                            <span className="text-xs text-muted-foreground">{term.pct}%</span>
+                            {termInv && (
+                              <>
+                                <span className="text-xs font-mono text-muted-foreground">{termInv.doc_number}</span>
+                                <Badge variant={invStatusColour[displayStatus] ?? "muted"}>{displayStatus}</Badge>
+                              </>
+                            )}
                           </div>
-                        )}
-                      </div>
-                      <div className="text-right space-y-1 shrink-0">
-                        <p className="font-bold text-sm">{formatZAR(inv.total)}</p>
-                        {due > 0 && <p className="text-xs text-destructive">{formatZAR(due)} outstanding</p>}
-                        {due <= 0 && <p className="text-xs text-success">Fully paid</p>}
-                        <div className="flex gap-1 justify-end mt-1">
-                          <Link href={`/invoices/${inv.id}`} className="inline-flex items-center gap-1 h-7 px-2 text-xs rounded hover:bg-muted transition-colors"><Eye className="w-3 h-3" />View</Link>
-                          <Button
-                            size="sm" variant="ghost" className="h-7 px-2 text-xs"
-                            onClick={() => window.open(`/api/pdf/invoice/${inv.id}`, "_blank")}
-                          >
-                            <Download className="w-3 h-3" />PDF
-                          </Button>
-                          {due > 0 && (
-                            <Button
-                              size="sm" variant="outline" className="h-7 px-2 text-xs"
-                              onClick={() => {
-                                setRecordPaymentFor(inv)
-                                setPaymentForm(f => ({ ...f, amount: String(due.toFixed(2)) }))
-                              }}
-                            >
-                              <CreditCard className="w-3 h-3" />Pay
+                          {termInv && (
+                            <p className="text-xs text-muted-foreground">
+                              Issued {shortDate(termInv.created_at)} · Due {shortDate(termInv.due_date)}
+                            </p>
+                          )}
+                          {invPmts.length > 0 && (
+                            <div className="mt-1.5 space-y-0.5">
+                              {invPmts.map((p: any) => (
+                                <p key={p.id} className="text-xs text-success">
+                                  {shortDate(p.paid_at)} — {formatZAR(p.amount)} received ({p.method?.toUpperCase()}{p.reference ? ` · ${p.reference}` : ""})
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right space-y-1 shrink-0">
+                          <p className="font-bold text-sm">{formatZAR(amount)}</p>
+                          {termInv ? (
+                            <>
+                              {termDue > 0 && <p className="text-xs text-destructive">{formatZAR(termDue)} outstanding</p>}
+                              {termDue <= 0 && <p className="text-xs text-success">Fully paid</p>}
+                              <div className="flex gap-1 justify-end mt-1">
+                                <Link href={`/invoices/${termInv.id}`} className="inline-flex items-center gap-1 h-7 px-2 text-xs rounded hover:bg-muted transition-colors">
+                                  <Eye className="w-3 h-3" />View
+                                </Link>
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                                  onClick={() => window.open(`/api/pdf/invoice/${termInv.id}`, "_blank")}>
+                                  <Download className="w-3 h-3" />PDF
+                                </Button>
+                                {termDue > 0 && (
+                                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                                    onClick={() => { setRecordPaymentFor(termInv); setPaymentForm(f => ({ ...f, amount: String(termDue.toFixed(2)) })) }}>
+                                    <CreditCard className="w-3 h-3" />Pay
+                                  </Button>
+                                )}
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:bg-destructive/10"
+                                  onClick={() => deleteInvoice(termInv.id)}>
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </>
+                          ) : (
+                            <Button size="sm" variant="outline" className="mt-1"
+                              onClick={() => generateInvoice(term.key)} disabled={!!generatingInvoice}>
+                              <Plus className="w-3.5 h-3.5" />{generatingInvoice === term.key ? "Generating…" : "Generate"}
                             </Button>
                           )}
-                          <Button
-                            size="sm" variant="ghost"
-                            className="h-7 px-2 text-destructive hover:bg-destructive/10"
-                            onClick={() => deleteInvoice(inv.id)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
                         </div>
                       </div>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <>
+                {invoices.length === 0 && <p className="text-sm text-muted-foreground px-5 py-4 text-center">No invoices yet</p>}
+                <ul className="divide-y divide-border">
+                  {invoices.map((inv: any) => {
+                    const invPaid = paidFor(inv.id)
+                    const invDue = Math.max(0, inv.total - invPaid)
+                    const invPmts = paymentsFor(inv.id)
+                    const isOverdue = inv.status === "issued" && inv.due_date && inv.due_date < today
+                    const displayStatus = isOverdue ? "overdue" : inv.status
+                    return (
+                      <li key={inv.id} className="px-5 py-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <p className="font-semibold text-sm">{inv.doc_number}</p>
+                              <Badge variant={invStatusColour[displayStatus] ?? "muted"}>{displayStatus}</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">Issued {shortDate(inv.created_at)} · Due {shortDate(inv.due_date)}</p>
+                            {invPmts.length > 0 && (
+                              <div className="mt-2 space-y-0.5">
+                                {invPmts.map((p: any) => (
+                                  <p key={p.id} className="text-xs text-success">
+                                    {shortDate(p.paid_at)} — {formatZAR(p.amount)} received ({p.method?.toUpperCase()}{p.reference ? ` · ${p.reference}` : ""})
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right space-y-1 shrink-0">
+                            <p className="font-bold text-sm">{formatZAR(inv.total)}</p>
+                            {invDue > 0 && <p className="text-xs text-destructive">{formatZAR(invDue)} outstanding</p>}
+                            {invDue <= 0 && <p className="text-xs text-success">Fully paid</p>}
+                            <div className="flex gap-1 justify-end mt-1">
+                              <Link href={`/invoices/${inv.id}`} className="inline-flex items-center gap-1 h-7 px-2 text-xs rounded hover:bg-muted transition-colors">
+                                <Eye className="w-3 h-3" />View
+                              </Link>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                                onClick={() => window.open(`/api/pdf/invoice/${inv.id}`, "_blank")}>
+                                <Download className="w-3 h-3" />PDF
+                              </Button>
+                              {invDue > 0 && (
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                                  onClick={() => { setRecordPaymentFor(inv); setPaymentForm(f => ({ ...f, amount: String(invDue.toFixed(2)) })) }}>
+                                  <CreditCard className="w-3 h-3" />Pay
+                                </Button>
+                              )}
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:bg-destructive/10"
+                                onClick={() => deleteInvoice(inv.id)}>
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </>
+            )}
             {invoices.length > 0 && (
               <div className="border-t border-border px-5 py-3 space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total paid</span>
-                  <span className="font-semibold text-success">{formatZAR(totalPaid)}</span>
-                </div>
-                {totalDue > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Still outstanding</span>
-                    <span className="font-semibold text-destructive">{formatZAR(totalDue)}</span>
-                  </div>
-                )}
+                <div className="flex justify-between"><span className="text-muted-foreground">Total paid</span><span className="font-semibold text-success">{formatZAR(totalPaid)}</span></div>
+                {totalDue > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Still outstanding</span><span className="font-semibold text-destructive">{formatZAR(totalDue)}</span></div>}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Record payment */}
+        {/* Record payment form */}
         {recordPaymentFor && (
           <Card className="border-primary/40 bg-primary/5">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">
-                  Record payment — {recordPaymentFor.doc_number}
-                </CardTitle>
-                <Button size="sm" variant="ghost" onClick={() => setRecordPaymentFor(null)}>
-                  <X className="w-4 h-4" />
-                </Button>
+                <CardTitle className="text-sm">Record payment — {recordPaymentFor.doc_number}</CardTitle>
+                <Button size="sm" variant="ghost" onClick={() => setRecordPaymentFor(null)}><X className="w-4 h-4" /></Button>
               </div>
             </CardHeader>
             <CardContent>
               <form onSubmit={recordPayment} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground">Amount (ZAR)</label>
-                    <Input
-                      type="number" step="0.01"
-                      value={paymentForm.amount}
-                      onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
-                      required
-                    />
+                    <Input type="number" step="0.01" value={paymentForm.amount}
+                      onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} required />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Method</label>
-                    <select
-                      value={paymentForm.method}
-                      onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))}
-                      className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none"
-                    >
-                      <option value="eft">EFT</option>
-                      <option value="cash">Cash</option>
-                      <option value="card">Card</option>
-                      <option value="other">Other</option>
+                    <select value={paymentForm.method} onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))}
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none">
+                      <option value="eft">EFT</option><option value="cash">Cash</option>
+                      <option value="card">Card</option><option value="other">Other</option>
                     </select>
                   </div>
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Reference</label>
-                  <Input
-                    value={paymentForm.reference}
-                    onChange={e => setPaymentForm(f => ({ ...f, reference: e.target.value }))}
-                    placeholder="e.g. bank reference"
-                  />
+                  <Input value={paymentForm.reference} onChange={e => setPaymentForm(f => ({ ...f, reference: e.target.value }))} placeholder="e.g. bank reference" />
                 </div>
                 <div className="flex gap-2">
-                  <Button type="submit" size="sm" disabled={savingPayment}>
-                    {savingPayment ? "Saving…" : "Record payment"}
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" onClick={() => setRecordPaymentFor(null)}>
-                    Cancel
-                  </Button>
+                  <Button type="submit" size="sm" disabled={savingPayment}>{savingPayment ? "Saving…" : "Record payment"}</Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setRecordPaymentFor(null)}>Cancel</Button>
                 </div>
               </form>
             </CardContent>
@@ -593,9 +520,7 @@ export default function ProjectDetailPage() {
         <Card>
           <CardHeader><CardTitle className="text-sm">Tasks</CardTitle></CardHeader>
           <CardContent className="p-0">
-            {tasks.length === 0 && (
-              <p className="text-sm text-muted-foreground px-5 py-4 text-center">No tasks yet</p>
-            )}
+            {tasks.length === 0 && <p className="text-sm text-muted-foreground px-5 py-4 text-center">No tasks yet</p>}
             <ul className="divide-y divide-border">
               {tasks.map(task => {
                 const taskOverdue = task.due_date && task.due_date < today && task.status !== "done"
@@ -605,9 +530,7 @@ export default function ProjectDetailPage() {
                       {taskStatusIcon[task.status] ?? <Circle className="w-4 h-4" />}
                     </button>
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => toggleTask(task)}>
-                      <p className={`text-sm font-medium ${task.status === "done" ? "line-through text-muted-foreground" : ""}`}>
-                        {task.title}
-                      </p>
+                      <p className={`text-sm font-medium ${task.status === "done" ? "line-through text-muted-foreground" : ""}`}>{task.title}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         {task.due_date && (
                           <p className={`text-xs ${taskOverdue ? "text-destructive font-medium" : "text-muted-foreground"}`}>
@@ -615,19 +538,13 @@ export default function ProjectDetailPage() {
                           </p>
                         )}
                         {(task.team_members as any)?.name && (
-                          <p className="text-xs text-muted-foreground">
-                            {task.due_date ? "· " : ""}{(task.team_members as any).name}
-                          </p>
+                          <p className="text-xs text-muted-foreground">{task.due_date ? "· " : ""}{(task.team_members as any).name}</p>
                         )}
                       </div>
                     </div>
-                    {(task.team_members as any)?.name && (
-                      <Avatar name={(task.team_members as any).name} size="sm" />
-                    )}
-                    <button
-                      onClick={() => deleteTask(task.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive mt-0.5 shrink-0"
-                    >
+                    {(task.team_members as any)?.name && <Avatar name={(task.team_members as any).name} size="sm" />}
+                    <button onClick={() => deleteTask(task.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive mt-0.5 shrink-0">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </li>
@@ -635,30 +552,15 @@ export default function ProjectDetailPage() {
               })}
             </ul>
             <div className="border-t border-border px-5 py-3 space-y-2">
-              <input
-                value={newTask}
-                onChange={e => setNewTask(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && addTask()}
-                placeholder="Add a task…"
-                className="w-full text-sm bg-transparent outline-none placeholder:text-muted-foreground"
-              />
+              <input value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => e.key === "Enter" && addTask()}
+                placeholder="Add a task…" className="w-full text-sm bg-transparent outline-none placeholder:text-muted-foreground" />
               {newTask.trim() && (
                 <div className="flex items-center gap-2">
-                  <Input
-                    type="date"
-                    value={taskDueDate}
-                    onChange={e => setTaskDueDate(e.target.value)}
-                    className="flex-1 h-7 text-xs"
-                  />
-                  <select
-                    value={taskAssignedTo}
-                    onChange={e => setTaskAssignedTo(e.target.value)}
-                    className="flex-1 border border-border rounded-lg px-2 py-1 text-xs bg-card focus:outline-none h-7"
-                  >
+                  <Input type="date" value={taskDueDate} onChange={e => setTaskDueDate(e.target.value)} className="flex-1 h-7 text-xs" />
+                  <select value={taskAssignedTo} onChange={e => setTaskAssignedTo(e.target.value)}
+                    className="flex-1 border border-border rounded-lg px-2 py-1 text-xs bg-card focus:outline-none h-7">
                     <option value="">No assignee</option>
-                    {teamMembers.map(m => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
+                    {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </select>
                   <Button size="sm" variant="outline" onClick={addTask} disabled={addingTask} className="h-7 px-3 text-xs">
                     {addingTask ? "Adding…" : "Add"}
@@ -682,58 +584,29 @@ export default function ProjectDetailPage() {
           <CardContent className="p-0">
             {showExpenseForm && (
               <div className="px-5 py-4 border-b border-border space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground">Date</label>
-                    <Input
-                      type="date" value={expenseForm.expense_date}
-                      onChange={e => setExpenseForm(f => ({ ...f, expense_date: e.target.value }))}
-                    />
+                    <Input type="date" value={expenseForm.expense_date} onChange={e => setExpenseForm(f => ({ ...f, expense_date: e.target.value }))} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Category</label>
-                    <select
-                      value={expenseForm.category}
-                      onChange={e => setExpenseForm(f => ({ ...f, category: e.target.value }))}
-                      className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none"
-                    >
-                      {expenseCategories.map(c => (
-                        <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                      ))}
+                    <select value={expenseForm.category} onChange={e => setExpenseForm(f => ({ ...f, category: e.target.value }))}
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none">
+                      {expenseCategories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Description *</label>
-                  <Input
-                    value={expenseForm.description}
-                    onChange={e => setExpenseForm(f => ({ ...f, description: e.target.value }))}
-                    placeholder="What was this expense for?"
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground">Supplier</label>
-                    <Input
-                      value={expenseForm.supplier}
-                      onChange={e => setExpenseForm(f => ({ ...f, supplier: e.target.value }))}
-                    />
+                  <div className="col-span-2">
+                    <label className="text-xs text-muted-foreground">Description *</label>
+                    <Input value={expenseForm.description} onChange={e => setExpenseForm(f => ({ ...f, description: e.target.value }))} placeholder="What was purchased?" />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground">Qty</label>
-                    <Input
-                      type="number" value={expenseForm.quantity}
-                      onChange={e => setExpenseForm(f => ({ ...f, quantity: parseFloat(e.target.value) }))}
-                      min="1" step="0.01"
-                    />
+                    <label className="text-xs text-muted-foreground">Supplier</label>
+                    <Input value={expenseForm.supplier} onChange={e => setExpenseForm(f => ({ ...f, supplier: e.target.value }))} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Unit cost</label>
-                    <Input
-                      type="number" value={expenseForm.unit_cost}
-                      onChange={e => setExpenseForm(f => ({ ...f, unit_cost: parseFloat(e.target.value) }))}
-                      min="0" step="0.01"
-                    />
+                    <Input type="number" value={expenseForm.unit_cost} onChange={e => setExpenseForm(f => ({ ...f, unit_cost: parseFloat(e.target.value) || 0 }))} min="0" step="0.01" />
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -742,27 +615,17 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
             )}
-            {expenses.length === 0 && !showExpenseForm && (
-              <p className="text-sm text-muted-foreground px-5 py-4 text-center">No expenses recorded</p>
-            )}
+            {expenses.length === 0 && !showExpenseForm && <p className="text-sm text-muted-foreground px-5 py-4 text-center">No expenses recorded</p>}
             <ul className="divide-y divide-border">
               {expenses.map(exp => (
-                <li key={exp.id} className="flex items-start justify-between gap-3 px-5 py-3 group">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{exp.description}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {shortDate(exp.expense_date)} · {exp.category}
-                      {exp.supplier ? ` · ${exp.supplier}` : ""}
-                    </p>
+                <li key={exp.id} className="flex items-center justify-between px-5 py-3 text-sm group">
+                  <div>
+                    <p className="font-medium">{exp.description}</p>
+                    <p className="text-xs text-muted-foreground">{shortDate(exp.expense_date)} · {exp.category}{exp.supplier ? ` · ${exp.supplier}` : ""}</p>
                   </div>
-                  <div className="text-right shrink-0 flex items-center gap-2">
-                    <span className="text-sm font-semibold">
-                      {formatZAR((exp.quantity ?? 1) * (exp.unit_cost ?? 0))}
-                    </span>
-                    <button
-                      onClick={() => deleteExpense(exp.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                    >
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{formatZAR((exp.quantity ?? 1) * (exp.unit_cost ?? 0))}</span>
+                    <button onClick={() => deleteExpense(exp.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -778,13 +641,11 @@ export default function ProjectDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Client interactions */}
+        {/* Interactions */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <MessageSquare className="w-4 h-4" />Interactions
-              </CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2"><MessageSquare className="w-4 h-4" />Interactions</CardTitle>
               <Button size="sm" variant="outline" onClick={() => setShowInteractionForm(v => !v)}>
                 <Plus className="w-3.5 h-3.5" />Log interaction
               </Button>
@@ -793,60 +654,34 @@ export default function ProjectDetailPage() {
           <CardContent className="p-0">
             {showInteractionForm && (
               <div className="px-5 py-4 border-b border-border space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground">Date</label>
-                    <Input
-                      type="date" value={interactionForm.interaction_date}
-                      onChange={e => setInteractionForm(f => ({ ...f, interaction_date: e.target.value }))}
-                    />
+                    <Input type="date" value={interactionForm.interaction_date} onChange={e => setInteractionForm(f => ({ ...f, interaction_date: e.target.value }))} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Type</label>
-                    <select
-                      value={interactionForm.type}
-                      onChange={e => setInteractionForm(f => ({ ...f, type: e.target.value }))}
-                      className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none"
-                    >
-                      {interactionTypes.map(t => (
-                        <option key={t} value={t}>{interactionLabels[t]}</option>
-                      ))}
+                    <select value={interactionForm.type} onChange={e => setInteractionForm(f => ({ ...f, type: e.target.value }))}
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none">
+                      {interactionTypes.map(t => <option key={t} value={t}>{interactionLabels[t]}</option>)}
                     </select>
                   </div>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Contact person</label>
-                  <Input
-                    value={interactionForm.contact_person}
-                    onChange={e => setInteractionForm(f => ({ ...f, contact_person: e.target.value }))}
-                    placeholder="Who did you speak to?"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Summary *</label>
-                  <textarea
-                    value={interactionForm.summary}
-                    onChange={e => setInteractionForm(f => ({ ...f, summary: e.target.value }))}
-                    placeholder="What was discussed?"
-                    rows={3}
-                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none resize-none"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-muted-foreground">Next action</label>
-                    <Input
-                      value={interactionForm.next_action}
-                      onChange={e => setInteractionForm(f => ({ ...f, next_action: e.target.value }))}
-                      placeholder="What needs to happen next?"
-                    />
+                    <label className="text-xs text-muted-foreground">Contact person</label>
+                    <Input value={interactionForm.contact_person} onChange={e => setInteractionForm(f => ({ ...f, contact_person: e.target.value }))} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs text-muted-foreground">Summary *</label>
+                    <textarea value={interactionForm.summary} onChange={e => setInteractionForm(f => ({ ...f, summary: e.target.value }))}
+                      rows={2} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none resize-none" />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground">Follow-up date</label>
-                    <Input
-                      type="date" value={interactionForm.next_action_date}
-                      onChange={e => setInteractionForm(f => ({ ...f, next_action_date: e.target.value }))}
-                    />
+                    <label className="text-xs text-muted-foreground">Next action</label>
+                    <Input value={interactionForm.next_action} onChange={e => setInteractionForm(f => ({ ...f, next_action: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Next action date</label>
+                    <Input type="date" value={interactionForm.next_action_date} onChange={e => setInteractionForm(f => ({ ...f, next_action_date: e.target.value }))} />
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -855,33 +690,26 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
             )}
-            {interactions.length === 0 && !showInteractionForm && (
-              <p className="text-sm text-muted-foreground px-5 py-4 text-center">No interactions logged</p>
-            )}
+            {interactions.length === 0 && !showInteractionForm && <p className="text-sm text-muted-foreground px-5 py-4 text-center">No interactions logged</p>}
             <ul className="divide-y divide-border">
               {interactions.map(int => (
                 <li key={int.id} className="px-5 py-3 group">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm">{interactionLabels[int.type] ?? int.type}</span>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs font-medium">{interactionLabels[int.type] ?? int.type}</span>
                         <span className="text-xs text-muted-foreground">{shortDate(int.interaction_date)}</span>
-                        {int.contact_person && (
-                          <span className="text-xs text-muted-foreground">· {int.contact_person}</span>
-                        )}
+                        {int.contact_person && <span className="text-xs text-muted-foreground">· {int.contact_person}</span>}
                       </div>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{int.summary}</p>
+                      <p className="text-sm">{int.summary}</p>
                       {int.next_action && (
-                        <p className="text-xs mt-1.5 text-primary">
-                          → {int.next_action}
-                          {int.next_action_date ? ` (by ${shortDate(int.next_action_date)})` : ""}
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Next: {int.next_action}{int.next_action_date ? ` · ${shortDate(int.next_action_date)}` : ""}
                         </p>
                       )}
                     </div>
-                    <button
-                      onClick={() => deleteInteraction(int.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive mt-0.5 shrink-0"
-                    >
+                    <button onClick={() => deleteInteraction(int.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -891,26 +719,6 @@ export default function ProjectDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Photos */}
-        {images.length > 0 && (
-          <Card>
-            <CardHeader><CardTitle className="text-sm">Photos</CardTitle></CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-2">
-                {images.map(img => (
-                  <a key={img.id} href={img.url} target="_blank" rel="noopener noreferrer">
-                    <img
-                      src={img.url}
-                      alt={img.caption ?? ""}
-                      className="w-full h-28 object-cover rounded-lg hover:opacity-80 transition-opacity"
-                    />
-                  </a>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Activity feed */}
         {activity.length > 0 && (
           <Card>
@@ -918,9 +726,11 @@ export default function ProjectDetailPage() {
             <CardContent className="p-0">
               <ul className="divide-y divide-border">
                 {activity.map(act => (
-                  <li key={act.id} className="px-5 py-3">
-                    <p className="text-sm">{act.body}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{shortDate(act.created_at)}</p>
+                  <li key={act.id} className="px-5 py-3 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm">{act.body}</p>
+                      <p className="text-xs text-muted-foreground shrink-0">{shortDate(act.created_at)}</p>
+                    </div>
                   </li>
                 ))}
               </ul>

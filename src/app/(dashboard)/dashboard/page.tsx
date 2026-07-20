@@ -69,7 +69,7 @@ export default async function DashboardPage() {
   return (
     <DashboardLayout title="Dashboard" user={{ email: user?.email, name: user?.user_metadata?.full_name }}>
       {/* Financial Pulse */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 mb-5">
         <Card className="border-l-4 border-l-emerald-500">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-1.5 mb-1"><TrendingUp className="w-3.5 h-3.5 text-emerald-600" /><p className="text-xs text-muted-foreground">Revenue this month</p></div>
@@ -124,7 +124,7 @@ export default async function DashboardPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+      <div className="grid grid-cols-1 lg:grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mb-5">
         {/* Action Items */}
         <div className="space-y-3">
           <h2 className="text-sm font-semibold px-0.5">Action items</h2>

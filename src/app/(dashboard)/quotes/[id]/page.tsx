@@ -73,7 +73,7 @@ export default function QuoteDetailPage() {
     <DashboardLayout
       title={quote.doc_number ?? "Quote"}
       actions={
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
           <Badge variant={statusColour[quote.status] ?? "muted"}>{quote.status}</Badge>
           <Link href={`/quotes/${id}/edit`}>
             <Button size="sm" variant="outline"><Pencil className="w-3.5 h-3.5" />Edit</Button>
@@ -140,7 +140,7 @@ export default function QuoteDetailPage() {
         <Card>
           <CardHeader><CardTitle className="text-sm">Details</CardTitle></CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 text-sm">
               <div><p className="text-muted-foreground text-xs">Quote number</p><p className="font-medium">{quote.doc_number ?? "—"}</p></div>
               <div><p className="text-muted-foreground text-xs">Created</p><p className="font-medium">{shortDate(quote.created_at)}</p></div>
               <div><p className="text-muted-foreground text-xs">Expires</p><p className="font-medium">{shortDate(quote.expires_at)}</p></div>
