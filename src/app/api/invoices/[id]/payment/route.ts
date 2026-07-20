@@ -8,7 +8,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   if (!amount || amount <= 0) return NextResponse.json({ error: "Invalid amount" }, { status: 400 })
 
-  const { data: invoice } = await supabase.from("invoices").select("id, total, amount_paid, status").eq("id", params.id).single()
+  const { data: invoice } = await supabase.from("invoices").select("id, total, status").eq("id", params.id).single()
   if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
 
   // Insert payment record
@@ -18,10 +18,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Update invoice amount_paid and status
-  const newAmountPaid = (invoice.amount_paid ?? 0) + amount
-  const newStatus = newAmountPaid >= invoice.total ? "paid" : invoice.status
-  await supabase.from("invoices").update({ amount_paid: newAmountPaid, status: newStatus, paid_at: newStatus === "paid" ? new Date().toISOString() : null }).eq("id", params.id)
+  // Compute total paid from payments table (avoids depending on amount_paid column)
+  const { data: existingPmts } = await supabase.from("payments").select("amount").eq("invoice_id", params.id)
+  const totalPaid = (existingPmts ?? []).reduce((s: number, p: any) => s + p.amount, 0)
+  const newStatus = totalPaid >= invoice.total ? "paid" : invoice.status === "draft" ? "issued" : invoice.status
+
+  // Update invoice status
+  await supabase.from("invoices").update({ status: newStatus }).eq("id", params.id)
 
   return NextResponse.json(payment, { status: 201 })
 }

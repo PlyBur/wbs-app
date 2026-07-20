@@ -39,16 +39,17 @@ export default function NewQuotePage() {
       setWorkspace(ws)
       const d = new Date(); d.setDate(d.getDate() + (ws.quote_validity_days ?? 30))
       setExpiresAt(d.toISOString().split("T")[0])
-      if (ws.default_terms_enabled) {
+      // If the workspace has saved default term percentages, pre-populate the form
+      if (ws.terms_deposit_pct || ws.terms_progress_pct || ws.terms_final_pct) {
         setTermsEnabled(true)
         setTerms(t => ({
           ...t,
-          deposit_label: ws.default_terms_deposit_label ?? t.deposit_label,
-          deposit_pct: ws.default_terms_deposit_pct ?? t.deposit_pct,
-          progress_label: ws.default_terms_progress_label ?? t.progress_label,
-          progress_pct: ws.default_terms_progress_pct ?? t.progress_pct,
-          final_label: ws.default_terms_final_label ?? t.final_label,
-          final_pct: ws.default_terms_final_pct ?? t.final_pct,
+          deposit_label: ws.terms_deposit_label ?? t.deposit_label,
+          deposit_pct: ws.terms_deposit_pct ?? t.deposit_pct,
+          progress_label: ws.terms_progress_label ?? t.progress_label,
+          progress_pct: ws.terms_progress_pct ?? t.progress_pct,
+          final_label: ws.terms_final_label ?? t.final_label,
+          final_pct: ws.terms_final_pct ?? t.final_pct,
         }))
       }
     })

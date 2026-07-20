@@ -40,12 +40,16 @@ async function fetchLogoImage(pdfDoc: PDFDocument, logoUrl: string) {
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   const supabase = await createClient()
   const [{ data: inv }, { data: pmts }] = await Promise.all([
-    supabase.from("invoices").select("*, clients(*), invoice_line_items(*), workspaces(*)").eq("id", params.id).single(),
+    supabase.from("invoices").select("*, clients(*), invoice_line_items(*)").eq("id", params.id).single(),
     supabase.from("payments").select("*").eq("invoice_id", params.id),
   ])
   if (!inv) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  const ws    = inv.workspaces as any
+  // Fetch workspace separately — more reliable than join
+  const { data: ws } = inv.workspace_id
+    ? await supabase.from("workspaces").select("*").eq("id", inv.workspace_id).single()
+    : await supabase.from("workspaces").select("*").single()
+
   const cl    = inv.clients   as any
   const items: any[] = [...((inv.invoice_line_items as any[]) ?? [])].sort((a, b) => a.sort_order - b.sort_order)
   const paid  = (pmts ?? []).reduce((s: number, p: any) => s + p.amount, 0)
@@ -55,8 +59,10 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   // ── Payment schedule for term invoices ────────────────────────────────────
   let termSchedule: { label: string; pct: number; amount: number; status: string; isCurrent: boolean }[] = []
   if (inv.term_type && inv.project_id) {
-    const { data: project } = await supabase.from("projects").select("*, quotes(*)").eq("id", inv.project_id).single()
-    const quote = project?.quotes as any
+    const { data: project } = await supabase.from("projects").select("quote_id").eq("id", inv.project_id).single()
+    const { data: quote } = project?.quote_id
+      ? await supabase.from("quotes").select("*").eq("id", project.quote_id).single()
+      : { data: null }
     if (quote?.terms_enabled) {
       const { data: allTermInv } = await supabase
         .from("invoices").select("id, term_type, total, doc_number").eq("project_id", inv.project_id).not("term_type", "is", null)
@@ -111,7 +117,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     page.drawText("W", { x: L + (44 - wW) / 2, y: y + 11, size: 22, font: fontB, color: C.white })
   }
 
-  page.drawText(ws?.name ?? "", { x: L, y: y - 16, size: 11, font: fontB, color: C.black })
+  if (ws?.name) page.drawText(ws.name, { x: L, y: y - 16, size: 11, font: fontB, color: C.black })
   if (vatOn && ws?.vat_number) {
     page.drawText(`VAT No: ${ws.vat_number}`, { x: L, y: y - 28, size: 8, font, color: C.gray })
   }
@@ -139,7 +145,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   page.drawRectangle({ x: L, y: y - metaH, width: W, height: metaH, color: C.lgray })
 
   page.drawText("BILL TO", { x: L + 14, y: y - 14, size: 7, font, color: C.gray })
-  page.drawText(cl?.name ?? "", { x: L + 14, y: y - 28, size: 11, font: fontB, color: C.black })
+  if (cl?.name) page.drawText(cl.name, { x: L + 14, y: y - 28, size: 11, font: fontB, color: C.black })
   const clSub = [cl?.company, cl?.email, cl?.phone].filter(Boolean)
   clSub.forEach((line, i) => {
     page.drawText(line, { x: L + 14, y: y - 41 - i * 12, size: 8.5, font, color: C.gray })
@@ -284,8 +290,10 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   const footY = 36
   page.drawLine({ start: { x: L, y: footY + 16 }, end: { x: R, y: footY + 16 }, thickness: 0.5, color: C.mgray })
   const parts = [ws?.name, ws?.registration_number ? `Reg: ${ws.registration_number}` : null, vatOn && ws?.vat_number ? `VAT: ${ws.vat_number}` : null, ws?.email ?? null].filter(Boolean).join("   ·   ")
-  const partsW = font.widthOfTextAtSize(parts, 8)
-  page.drawText(parts, { x: (width - partsW) / 2, y: footY, size: 8, font, color: C.gray })
+  if (parts) {
+    const partsW = font.widthOfTextAtSize(parts, 8)
+    page.drawText(parts, { x: (width - partsW) / 2, y: footY, size: 8, font, color: C.gray })
+  }
 
   // ── Output ────────────────────────────────────────────────────────────────
   const pdfBytes = await pdfDoc.save()
