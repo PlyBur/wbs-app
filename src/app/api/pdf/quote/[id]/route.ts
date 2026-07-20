@@ -2,18 +2,40 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "pdf-lib"
 
-const blue = rgb(0.145, 0.388, 0.922)   // #2563EB
-const gray = rgb(0.42, 0.447, 0.502)    // #6B7280
-const lgray = rgb(0.953, 0.957, 0.965)  // #F3F4F6
-const black = rgb(0.067, 0.094, 0.153)  // #111827
-const green = rgb(0.086, 0.502, 0.247)  // #166534
+// ── Colours ──────────────────────────────────────────────────────────────────
+const C = {
+  blue:    rgb(0.145, 0.388, 0.922),  // #2563EB
+  blueDk:  rgb(0.118, 0.306, 0.737),  // slightly darker blue for stripe
+  black:   rgb(0.067, 0.094, 0.153),  // #111827
+  gray:    rgb(0.42,  0.447, 0.502),  // #6B7280
+  lgray:   rgb(0.953, 0.957, 0.965),  // #F3F4F6
+  mgray:   rgb(0.882, 0.894, 0.914),  // #E1E4E9 - border lines
+  white:   rgb(1, 1, 1),
+  green:   rgb(0.086, 0.502, 0.247),  // #166534
+  greenBg: rgb(0.941, 0.992, 0.961),  // #F0FDF4
+}
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const fzar = (n: number) => {
   const [i, d] = (n || 0).toFixed(2).split(".")
   return "R " + i.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + "," + d
 }
 const fdate = (s: string | null) =>
   s ? new Date(s).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "—"
+
+async function fetchLogoImage(pdfDoc: PDFDocument, logoUrl: string) {
+  try {
+    const res = await fetch(logoUrl)
+    if (!res.ok) return null
+    const bytes = await res.arrayBuffer()
+    const ct = res.headers.get("content-type") ?? ""
+    const url = logoUrl.toLowerCase()
+    if (ct.includes("png") || url.includes(".png")) return await pdfDoc.embedPng(bytes)
+    if (ct.includes("jpeg") || ct.includes("jpg") || url.includes(".jpg") || url.includes(".jpeg")) return await pdfDoc.embedJpg(bytes)
+    // Try PNG first, then JPEG
+    try { return await pdfDoc.embedPng(bytes) } catch { return await pdfDoc.embedJpg(bytes) }
+  } catch { return null }
+}
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   const supabase = await createClient()
@@ -24,146 +46,228 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     .single()
   if (!q) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  const ws = q.workspaces as any
-  const cl = q.clients as any
+  const ws    = q.workspaces as any
+  const cl    = q.clients   as any
   const items: any[] = [...((q.quote_line_items as any[]) ?? [])].sort((a, b) => a.sort_order - b.sort_order)
   const vatOn = ws?.vat_registered !== false
 
-  const pdfDoc = await PDFDocument.create()
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+  // ── Build PDF ────────────────────────────────────────────────────────────
+  const pdfDoc  = await PDFDocument.create()
+  const font    = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const fontB   = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-  const page = pdfDoc.addPage(PageSizes.A4)
+  // Try to load logo
+  const logoImg = ws?.logo_url ? await fetchLogoImage(pdfDoc, ws.logo_url) : null
+
+  const page        = pdfDoc.addPage(PageSizes.A4)
   const { width, height } = page.getSize()
-  const L = 40        // left margin
-  const R = width - 40 // right edge
-  const W = R - L     // usable width
+  const L  = 44          // left margin
+  const R  = width - 44  // right edge
+  const W  = R - L       // usable width (507)
 
-  let y = height - 40
+  let y = height  // we'll draw top-down
 
-  // ── Logo box ─────────────────────────────────────────────────────────────
-  page.drawRectangle({ x: L, y: y - 36, width: 36, height: 36, color: blue })
-  page.drawText("W", { x: L + 10, y: y - 24, size: 18, font: fontBold, color: rgb(1,1,1) })
+  // ── Blue accent stripe ────────────────────────────────────────────────────
+  page.drawRectangle({ x: 0, y: height - 5, width, height: 5, color: C.blue })
+  y = height - 5
 
-  // Business name
-  page.drawText(ws?.name ?? "", { x: L + 44, y: y - 12, size: 12, font: fontBold, color: black })
-  if (vatOn && ws?.vat_number) {
-    page.drawText(`VAT: ${ws.vat_number}`, { x: L + 44, y: y - 26, size: 8, font, color: gray })
+  // ── Header ────────────────────────────────────────────────────────────────
+  y -= 44
+
+  // Logo or placeholder
+  if (logoImg) {
+    const dims = logoImg.scaleToFit(110, 44)
+    page.drawImage(logoImg, { x: L, y, width: dims.width, height: dims.height })
+  } else {
+    page.drawRectangle({ x: L, y, width: 44, height: 44, color: C.blue, borderRadius: 6 })
+    const wW = fontB.widthOfTextAtSize("W", 22)
+    page.drawText("W", { x: L + (44 - wW) / 2, y: y + 11, size: 22, font: fontB, color: C.white })
   }
 
-  // QUOTE (right aligned)
-  const quoteLabelW = fontBold.widthOfTextAtSize("QUOTE", 26)
-  page.drawText("QUOTE", { x: R - quoteLabelW, y: y - 12, size: 26, font: fontBold, color: blue })
-  const docNumW = font.widthOfTextAtSize(q.doc_number ?? "", 9)
-  page.drawText(q.doc_number ?? "", { x: R - docNumW, y: y - 36, size: 9, font, color: gray })
-  const dateStr = `Date: ${fdate(q.created_at)}`
-  page.drawText(dateStr, { x: R - font.widthOfTextAtSize(dateStr, 9), y: y - 47, size: 9, font, color: gray })
-  const expStr = `Expires: ${fdate(q.expires_at)}`
-  page.drawText(expStr, { x: R - font.widthOfTextAtSize(expStr, 9), y: y - 58, size: 9, font, color: gray })
+  // Business name + VAT under logo
+  page.drawText(ws?.name ?? "", { x: L, y: y - 16, size: 11, font: fontB, color: C.black })
+  if (vatOn && ws?.vat_number) {
+    page.drawText(`VAT No: ${ws.vat_number}`, { x: L, y: y - 28, size: 8, font, color: C.gray })
+  }
 
-  y -= 60
+  // QUOTE label (right)
+  const ql = "QUOTE"
+  const qlW = fontB.widthOfTextAtSize(ql, 30)
+  page.drawText(ql, { x: R - qlW, y: y + 8, size: 30, font: fontB, color: C.blue })
 
-  // ── Meta box ─────────────────────────────────────────────────────────────
-  y -= 12
-  page.drawRectangle({ x: L, y: y - 60, width: W, height: 60, color: lgray })
-  page.drawText("PREPARED FOR", { x: L + 12, y: y - 14, size: 7, font, color: gray })
-  page.drawText(cl?.name ?? "", { x: L + 12, y: y - 26, size: 10, font: fontBold, color: black })
-  const clientSub = [cl?.company, cl?.email].filter(Boolean).join("  ·  ")
-  if (clientSub) page.drawText(clientSub, { x: L + 12, y: y - 38, size: 8, font, color: gray })
+  // Doc details (right, below QUOTE)
+  const details = [
+    q.doc_number ?? "",
+    `Date: ${fdate(q.created_at)}`,
+    `Expires: ${fdate(q.expires_at)}`,
+  ]
+  let detY = y - 10
+  for (const d of details) {
+    const dW = font.widthOfTextAtSize(d, 9)
+    page.drawText(d, { x: R - dW, y: detY, size: 9, font, color: C.gray })
+    detY -= 13
+  }
 
-  page.drawText("QUOTE TOTAL", { x: L + 290, y: y - 14, size: 7, font, color: gray })
-  page.drawText(fzar(q.total), { x: L + 290, y: y - 30, size: 16, font: fontBold, color: blue })
-  if (q.project_title) page.drawText(q.project_title, { x: L + 290, y: y - 44, size: 8, font, color: gray })
+  y -= 50
 
-  y -= 74
+  // ── Divider ───────────────────────────────────────────────────────────────
+  page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.75, color: C.mgray })
+  y -= 16
+
+  // ── Meta: bill-to / quote-total ───────────────────────────────────────────
+  const metaH = 72
+  page.drawRectangle({ x: L, y: y - metaH, width: W, height: metaH, color: C.lgray, borderRadius: 6 })
+
+  // Left: Prepared for
+  page.drawText("PREPARED FOR", { x: L + 14, y: y - 14, size: 7, font, color: C.gray })
+  page.drawText(cl?.name ?? "", { x: L + 14, y: y - 28, size: 11, font: fontB, color: C.black })
+  const clSub = [cl?.company, cl?.email, cl?.phone].filter(Boolean)
+  clSub.forEach((line, i) => {
+    page.drawText(line, { x: L + 14, y: y - 41 - i * 12, size: 8.5, font, color: C.gray })
+  })
+
+  // Vertical divider
+  page.drawLine({ start: { x: L + W / 2, y: y - 10 }, end: { x: L + W / 2, y: y - metaH + 10 }, thickness: 0.5, color: C.mgray })
+
+  // Right: Quote total
+  const totX = L + W / 2 + 14
+  page.drawText("QUOTE TOTAL", { x: totX, y: y - 14, size: 7, font, color: C.gray })
+  const totalStr = fzar(q.total)
+  page.drawText(totalStr, { x: totX, y: y - 32, size: 18, font: fontB, color: C.blue })
+  if (q.project_title) {
+    page.drawText(q.project_title, { x: totX, y: y - 48, size: 9, font, color: C.gray })
+  }
+
+  y -= metaH + 20
 
   // ── Line items table ──────────────────────────────────────────────────────
-  // Header
-  page.drawRectangle({ x: L, y: y - 18, width: W, height: 18, color: lgray })
-  page.drawText("ITEM",       { x: L + 8,   y: y - 12, size: 7, font, color: gray })
-  page.drawText("QTY",        { x: L + 310, y: y - 12, size: 7, font, color: gray })
-  page.drawText("UNIT PRICE", { x: L + 360, y: y - 12, size: 7, font, color: gray })
-  page.drawText("TOTAL",      { x: L + 450, y: y - 12, size: 7, font, color: gray })
-  y -= 18
+  // Column positions
+  const col = {
+    desc:  L,
+    qty:   L + 330,
+    up:    L + 375,
+    tot:   L + 455,
+    rEdge: R,
+  }
 
-  items.forEach((item) => {
-    const title = item.title || item.description || "Item"
-    const desc = item.title && item.description ? item.description : null
-    const rowH = desc ? 30 : 20
+  // Table header
+  const thH = 22
+  page.drawRectangle({ x: L, y: y - thH, width: W, height: thH, color: C.blue, borderRadius: 4 })
+  page.drawText("ITEM",       { x: col.desc + 8, y: y - 15, size: 8, font: fontB, color: C.white })
+  page.drawText("QTY",        { x: col.qty,       y: y - 15, size: 8, font: fontB, color: C.white })
+  page.drawText("UNIT PRICE", { x: col.up,        y: y - 15, size: 8, font: fontB, color: C.white })
+  page.drawText("TOTAL",      { x: col.tot,       y: y - 15, size: 8, font: fontB, color: C.white })
+  y -= thH
 
-    page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.5, color: lgray })
-    page.drawText(title.substring(0, 55), { x: L + 8, y: y - 12, size: 9, font: fontBold, color: black })
-    if (desc) page.drawText(desc.substring(0, 65), { x: L + 8, y: y - 23, size: 7, font, color: gray })
-    page.drawText(String(item.quantity), { x: L + 310, y: y - 12, size: 9, font, color: black })
-    page.drawText(fzar(item.unit_price), { x: L + 355, y: y - 12, size: 9, font, color: black })
-    page.drawText(fzar(item.quantity * item.unit_price), { x: L + 445, y: y - 12, size: 9, font: fontBold, color: black })
+  // Rows
+  items.forEach((item, idx) => {
+    const title = (item.title || item.description || "Item").substring(0, 58)
+    const desc  = item.title && item.description ? item.description.substring(0, 70) : null
+    const rowH  = desc ? 34 : 22
+
+    if (idx % 2 === 1) {
+      page.drawRectangle({ x: L, y: y - rowH, width: W, height: rowH, color: rgb(0.98, 0.984, 1) })
+    }
+    page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.4, color: C.mgray })
+
+    page.drawText(title, { x: col.desc + 8, y: y - 14, size: 9.5, font: fontB, color: C.black })
+    if (desc) page.drawText(desc, { x: col.desc + 8, y: y - 26, size: 8, font, color: C.gray })
+
+    const qtyStr = String(item.quantity)
+    page.drawText(qtyStr, { x: col.qty, y: y - 14, size: 9.5, font, color: C.black })
+
+    const upStr = fzar(item.unit_price)
+    page.drawText(upStr, { x: col.up, y: y - 14, size: 9.5, font, color: C.black })
+
+    const totStr = fzar(item.quantity * item.unit_price)
+    const totStrW = fontB.widthOfTextAtSize(totStr, 9.5)
+    page.drawText(totStr, { x: col.rEdge - totStrW, y: y - 14, size: 9.5, font: fontB, color: C.black })
+
     y -= rowH
   })
 
   if (items.length === 0) {
-    page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.5, color: lgray })
-    page.drawText("No line items", { x: L + 8, y: y - 12, size: 9, font, color: gray })
-    y -= 20
+    page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.4, color: C.mgray })
+    page.drawText("No line items", { x: col.desc + 8, y: y - 14, size: 9, font, color: C.gray })
+    y -= 22
   }
+
+  // Bottom border
+  page.drawLine({ start: { x: L, y }, end: { x: R, y }, thickness: 0.75, color: C.mgray })
+  y -= 16
 
   // ── Totals ────────────────────────────────────────────────────────────────
-  y -= 10
-  const totX = L + 330
+  const tX = L + 295  // totals start x
+  const tW = R - tX   // totals width
 
-  const drawTot = (label: string, value: string, bold = false) => {
-    const f = bold ? fontBold : font
-    const sz = bold ? 11 : 9
-    const col = bold ? black : gray
-    if (bold) {
-      page.drawLine({ start: { x: totX, y: y + 4 }, end: { x: R, y: y + 4 }, thickness: 0.8, color: black })
-      y -= 4
-    }
-    page.drawText(label, { x: totX, y, size: sz, font: f, color: col })
+  const drawTotRow = (label: string, value: string, bold = false, colOverride?: typeof C.blue) => {
+    const f   = bold ? fontB : font
+    const sz  = bold ? 11.5 : 9.5
+    const col = colOverride ?? (bold ? C.black : C.gray)
+    page.drawText(label, { x: tX, y, size: sz, font: f, color: col })
     const vW = f.widthOfTextAtSize(value, sz)
     page.drawText(value, { x: R - vW, y, size: sz, font: f, color: col })
-    y -= bold ? 16 : 13
+    y -= bold ? 8 : 4
+    if (bold) {
+      page.drawLine({ start: { x: tX, y }, end: { x: R, y }, thickness: 0.75, color: C.black })
+      y -= 8
+    } else {
+      y -= 13
+    }
   }
 
-  drawTot("Subtotal", fzar(q.subtotal))
-  if (q.travel_cost > 0) drawTot("Travel", fzar(q.travel_cost))
-  if (q.discount_amount > 0) drawTot("Discount", `-${fzar(q.discount_amount)}`)
-  if (vatOn) drawTot(`VAT (${q.vat_rate}%)`, fzar(q.vat_amount))
-  drawTot(vatOn ? "Total (incl. VAT)" : "Total", fzar(q.total), true)
+  drawTotRow("Subtotal", fzar(q.subtotal))
+  if (q.travel_cost > 0) drawTotRow("Travel", fzar(q.travel_cost))
+  if (q.discount_amount > 0) drawTotRow("Discount", `-${fzar(q.discount_amount)}`)
+  if (vatOn) drawTotRow(`VAT (${q.vat_rate}%)`, fzar(q.vat_amount))
+  drawTotRow(vatOn ? "Total (incl. VAT)" : "Total", fzar(q.total), true)
+
+  y -= 8
 
   // ── Payment schedule ──────────────────────────────────────────────────────
   if (q.terms_enabled) {
-    y -= 16
-    page.drawText("PAYMENT SCHEDULE", { x: L, y, size: 7, font, color: gray })
-    y -= 10
+    page.drawText("PAYMENT SCHEDULE", { x: L, y, size: 7.5, font: fontB, color: C.gray })
+    y -= 14
+
     const termDefs = [
       { label: q.terms_deposit_label  ?? "Deposit",                    pct: q.terms_deposit_pct },
       { label: q.terms_progress_label ?? "Progress payment",           pct: q.terms_progress_pct },
       { label: q.terms_final_label    ?? "Final payment on completion", pct: q.terms_final_pct },
     ].filter(t => t.pct)
-    termDefs.forEach(t => {
-      page.drawRectangle({ x: L, y: y - 16, width: W, height: 16, color: rgb(0.94, 0.99, 0.96) })
-      page.drawText(`${t.label} (${t.pct}%)`, { x: L + 8, y: y - 11, size: 9, font: fontBold, color: green })
+
+    termDefs.forEach((t, i) => {
+      const bg = i % 2 === 0 ? C.greenBg : rgb(0.96, 0.998, 0.975)
+      page.drawRectangle({ x: L, y: y - 20, width: W, height: 20, color: bg })
+      if (i === 0) page.drawRectangle({ x: L, y: y - 20, width: W, height: 20, color: bg, borderRadius: 4 })
+      page.drawText(`${t.label}`, { x: L + 10, y: y - 13, size: 9.5, font: fontB, color: C.green })
+      page.drawText(`${t.pct}%`,  { x: L + 10, y: y - 13, size: 9.5, font, color: C.gray })
       const amt = fzar(q.total * t.pct / 100)
-      page.drawText(amt, { x: R - fontBold.widthOfTextAtSize(amt, 9), y: y - 11, size: 9, font: fontBold, color: green })
-      y -= 16
+      const amtW = fontB.widthOfTextAtSize(amt, 9.5)
+      // fix: label on left, pct in middle, amount right
+      const lblW = fontB.widthOfTextAtSize(`${t.label}`, 9.5)
+      page.drawText(`  (${t.pct}%)`, { x: L + 10 + lblW, y: y - 13, size: 9, font, color: C.gray })
+      page.drawText(amt, { x: R - amtW, y: y - 13, size: 9.5, font: fontB, color: C.green })
+      y -= 20
     })
+    y -= 8
   }
 
   // ── Notes ─────────────────────────────────────────────────────────────────
   if (q.notes) {
+    page.drawText("NOTES", { x: L, y, size: 7.5, font: fontB, color: C.gray })
     y -= 14
-    page.drawText("NOTES", { x: L, y, size: 7, font, color: gray })
-    y -= 12
-    page.drawText(q.notes.substring(0, 200), { x: L, y, size: 9, font, color: black, maxWidth: W, lineHeight: 14 })
+    page.drawText(q.notes.substring(0, 300), { x: L, y, size: 9, font, color: C.black, maxWidth: W, lineHeight: 14 })
+    y -= 28
   }
 
   // ── Footer ────────────────────────────────────────────────────────────────
-  const footY = 30
-  page.drawLine({ start: { x: L, y: footY + 14 }, end: { x: R, y: footY + 14 }, thickness: 0.5, color: lgray })
-  const footParts = [ws?.name, ws?.registration_number ? `Reg: ${ws.registration_number}` : null, vatOn && ws?.vat_number ? `VAT: ${ws.vat_number}` : null].filter(Boolean).join("  ·  ")
-  const footW = font.widthOfTextAtSize(footParts, 8)
-  page.drawText(footParts, { x: (width - footW) / 2, y: footY, size: 8, font, color: gray })
+  const footY = 36
+  page.drawLine({ start: { x: L, y: footY + 16 }, end: { x: R, y: footY + 16 }, thickness: 0.5, color: C.mgray })
+  const parts = [ws?.name, ws?.registration_number ? `Reg: ${ws.registration_number}` : null, vatOn && ws?.vat_number ? `VAT: ${ws.vat_number}` : null, ws?.email ?? null].filter(Boolean).join("   ·   ")
+  const partsW = font.widthOfTextAtSize(parts, 8)
+  page.drawText(parts, { x: (width - partsW) / 2, y: footY, size: 8, font, color: C.gray })
 
+  // ── Output ────────────────────────────────────────────────────────────────
   const pdfBytes = await pdfDoc.save()
   return new Response(Buffer.from(pdfBytes), {
     headers: {
