@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { htmlToPdf } from "@/lib/pdf-generator"
 
 const fzar = (n: number) => { const [i,d]=(n||0).toFixed(2).split(".");return "R "+i.replace(/\B(?=(\d{3})+(?!\d))/g," ")+","+d }
 const fdate = (s: string|null) => s ? new Date(s).toLocaleDateString("en-ZA",{day:"numeric",month:"short",year:"numeric"}) : "—"
@@ -37,8 +36,13 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     </div>`).join("")}
 </div>` : ""
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quote ${v(q.doc_number)}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:13px;color:#111;padding:40px}
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quote ${v(q.doc_number)}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:13px;color:#111;background:#e5e7eb;min-height:100vh}
+.page{background:#fff;max-width:800px;margin:0 auto;padding:40px}
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px}
 .logo{width:40px;height:40px;background:#2563eb;border-radius:8px;color:#fff;font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center}
 .bn{font-weight:700;font-size:15px;margin-top:6px}.bd{color:#6b7280;font-size:12px}
@@ -53,7 +57,21 @@ td{padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;word-wrap:br
 td:not(:first-child){text-align:right;white-space:nowrap}
 .tots{margin-left:auto;width:260px}.tr{display:flex;justify-content:space-between;padding:5px 0}.tl{color:#6b7280}
 .tr.tot{font-weight:700;font-size:15px;border-top:2px solid #111;margin-top:6px;padding-top:10px}.tr.tot .tl{color:#111}
-.foot{margin-top:40px;padding-top:14px;border-top:1px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:11px}</style></head><body>
+.foot{margin-top:40px;padding-top:14px;border-top:1px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:11px}
+.print-bar{background:#2563eb;color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.print-bar p{font-size:13px;opacity:.85}
+.print-btn{background:#fff;color:#2563eb;border:none;border-radius:6px;padding:8px 18px;font-weight:700;font-size:14px;cursor:pointer}
+@media print{
+  body{background:#fff}
+  .print-bar{display:none}
+  .page{padding:20px;max-width:none}
+}
+</style></head><body>
+<div class="print-bar">
+  <p>Quote ${v(q.doc_number)} — ${v(cl?.name)}</p>
+  <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+</div>
+<div class="page">
 <div class="hdr">
   <div>${logoHtml}<div class="bn">${v(ws?.name)}</div>${vatOn&&ws?.vat_number?`<div class="bd">VAT: ${ws.vat_number}</div>`:""}</div>
   <div class="dt"><h1>QUOTE</h1><p>${v(q.doc_number)}</p><p>Date: ${fdate(q.created_at)}</p><p>Expires: ${fdate(q.expires_at)}</p></div>
@@ -76,20 +94,10 @@ ${items.map((i: any)=>`<tr><td><strong>${v(i.title||i.description)}</strong>${i.
 ${termsHtml}
 ${q.notes?`<div style="margin-top:24px"><h3 style="font-size:11px;text-transform:uppercase;color:#9ca3af;margin-bottom:6px">Notes</h3><p style="color:#374151;white-space:pre-wrap">${v(q.notes)}</p></div>`:""}
 <div class="foot">${v(ws?.name)}${ws?.registration_number?" · Reg: "+ws.registration_number:""}${vatOn&&ws?.vat_number?" · VAT: "+ws.vat_number:""}</div>
+</div>
 </body></html>`
 
-  try {
-    const pdfBytes = await htmlToPdf(html)
-    return new NextResponse(pdfBytes as unknown as BodyInit, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${v(q.doc_number) || "quote"}.pdf"`,
-      },
-    })
-  } catch (err: any) {
-    console.error("PDF generation error:", err.message)
-    return new NextResponse(html + "<script>window.onload=()=>window.print()</script>", {
-      headers: { "Content-Type": "text/html" },
-    })
-  }
+  return new NextResponse(html, {
+    headers: { "Content-Type": "text/html" },
+  })
 }
