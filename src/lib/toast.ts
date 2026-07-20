@@ -26,5 +26,5 @@ export function toast(message: string, variant: ToastVariant = "info") {
 export function subscribeToasts(listener: Listener) {
   listeners.add(listener)
   listener([...items])
-  return () => listeners.delete(listener)
+  return () => { listeners.delete(listener) }
 }
