@@ -245,9 +245,9 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     const shH = 18
     page.drawRectangle({ x: L, y: y - shH, width: W, height: shH, color: C.lgray })
     page.drawText("MILESTONE", { x: L + 8,   y: y - 12, size: 7.5, font: fontB, color: C.gray })
-    page.drawText("%",         { x: L + 290, y: y - 12, size: 7.5, font: fontB, color: C.gray })
-    page.drawText("AMOUNT",    { x: L + 335, y: y - 12, size: 7.5, font: fontB, color: C.gray })
-    page.drawText("STATUS",    { x: L + 425, y: y - 12, size: 7.5, font: fontB, color: C.gray })
+    page.drawText("%",         { x: L + 240, y: y - 12, size: 7.5, font: fontB, color: C.gray })
+    page.drawText("AMOUNT",    { x: L + 285, y: y - 12, size: 7.5, font: fontB, color: C.gray })
+    page.drawText("STATUS",    { x: L + 375, y: y - 12, size: 7.5, font: fontB, color: C.gray })
     y -= shH
 
     termSchedule.forEach(t => {
@@ -257,11 +257,11 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
       const f = t.isCurrent ? fontB : font
       page.drawText(t.label + (t.isCurrent ? " <" : ""), { x: L + 8, y: y - 13, size: 9, font: f, color: C.black })
-      page.drawText(`${t.pct}%`, { x: L + 290, y: y - 13, size: 9, font, color: C.gray })
-      page.drawText(fzar(t.amount), { x: L + 335, y: y - 13, size: 9, font, color: C.black })
+      page.drawText(`${t.pct}%`, { x: L + 240, y: y - 13, size: 9, font, color: C.gray })
+      page.drawText(fzar(t.amount), { x: L + 285, y: y - 13, size: 9, font, color: C.black })
 
       const sCol = t.status === "Paid" ? C.green : t.status === "Not invoiced" ? C.gray : C.amber
-      page.drawText(t.status, { x: L + 425, y: y - 13, size: 8.5, font: fontB, color: sCol })
+      page.drawText(t.status, { x: L + 375, y: y - 13, size: 8.5, font: fontB, color: sCol })
       y -= rowH
     })
     y -= 10
