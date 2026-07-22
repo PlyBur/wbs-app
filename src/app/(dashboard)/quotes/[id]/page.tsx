@@ -10,7 +10,7 @@ import { formatZAR, shortDate } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "@/lib/toast"
 import { PageSkeleton } from "@/components/ui/skeleton"
-import { Mail, Phone, Building2, Pencil, Trash2, Copy } from "lucide-react"
+import { Mail, Phone, Building2, Pencil, Trash2 } from "lucide-react"
 import Link from "next/link"
 
 const statusColour: Record<string, any> = {
@@ -68,7 +68,6 @@ export default function QuoteDetailPage() {
   const client = quote.clients as any
   const lineItems: any[] = quote.quote_line_items ?? []
   const linkedProject = Array.isArray(quote.projects) ? quote.projects[0] : quote.projects
-  const publicUrl = typeof window !== "undefined" ? `${window.location.origin}/quote/${quote.public_token}` : ""
   const vatOn = workspace?.vat_registered !== false
 
   return (
@@ -93,11 +92,6 @@ export default function QuoteDetailPage() {
               onClick={acceptQuote}
             >
               Accept quote
-            </Button>
-          )}
-          {quote.status === "sent" && (
-            <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(publicUrl); toast("Client link copied!", "success") }}>
-              Copy client link
             </Button>
           )}
           {quote.status === "accepted" && linkedProject && (
@@ -162,12 +156,6 @@ export default function QuoteDetailPage() {
                 </div>
               )}
             </div>
-            {quote.status === "sent" && (
-              <div className="mt-3 p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Client acceptance link</p>
-                <p className="text-xs font-mono break-all">{publicUrl}</p>
-              </div>
-            )}
           </CardContent>
         </Card>
 

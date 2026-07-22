@@ -32,6 +32,7 @@ export default function NewInvoicePage() {
       setWorkspace(ws)
       const d = new Date(); d.setDate(d.getDate() + (ws.invoice_due_days ?? 30))
       setDueDate(d.toISOString().split("T")[0])
+      if (ws.invoice_notes) setNotes(ws.invoice_notes)
     })
   }, [])
 
@@ -50,33 +51,26 @@ export default function NewInvoicePage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    if (!clientId) { toast("Please select a client", "error"); return }
     setSaving(true)
-    const { data: ws } = await supabase.from("workspaces").select("id").single()
-    const { data: inv, error } = await supabase.from("invoices").insert({
-      workspace_id: ws?.id,
-      client_id: clientId,
-      status: "issued",
-      sent_at: new Date().toISOString(),
-      subtotal, travel_cost: travelCost, discount_amount: discount,
-      vat_rate: vatRate, vat_amount: vatAmount, total,
-      due_date: dueDate, notes,
-    }).select().single()
-    if (error || !inv) { toast(error?.message ?? "Failed to create invoice", "error"); setSaving(false); return }
-    if (items.filter(i => i.title.trim()).length > 0) {
-      await supabase.from("invoice_line_items").insert(
-        items.filter(i => i.title.trim()).map((item, idx) => ({
-          invoice_id: inv.id,
-          title: item.title,
-          description: item.description || null,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          is_taxable: item.is_taxable,
-          sort_order: idx,
-        }))
-      )
+    const res = await fetch("/api/invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: clientId || null,
+        due_date: dueDate || null,
+        notes: notes || null,
+        subtotal, travel_cost: travelCost, discount_amount: discount,
+        vat_rate: vatRate, vat_amount: vatAmount, total,
+        items,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      toast(data.error ?? "Failed to create invoice", "error")
+      setSaving(false)
+    } else {
+      router.push(`/invoices/${data.id}`)
     }
-    router.push(`/invoices/${inv.id}`)
   }
 
   return (
@@ -87,9 +81,9 @@ export default function NewInvoicePage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">Client *</label>
-                <select value={clientId} onChange={e => setClientId(e.target.value)} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none" required>
-                  <option value="">Select client…</option>
+                <label className="text-xs text-muted-foreground">Client (optional)</label>
+                <select value={clientId} onChange={e => setClientId(e.target.value)} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none">
+                  <option value="">No client / cash sale</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
